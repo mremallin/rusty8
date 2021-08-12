@@ -38,25 +38,24 @@ impl Chip8Instance {
 	}
 
 	fn match_opcode_0(&mut self, instruction: u16) {
-		match instruction.to_be() {
+		match instruction {
 			0x00e0 => self.clear_display(),
 			0x00ee => self.pc = self.stack_pop(),
 			_ => self.unknown_instruction(instruction),
 		}
 	}
 
-	fn need_to_byteswap_opcode() -> bool {
-		(47 as u16).to_be() == 47
+	fn is_little_endian() -> bool {
+		(47 as u16).to_be() != 47
 	}
 
 	pub fn interpret_instruction(&mut self, mut instruction: u16) {
-		if Chip8Instance::need_to_byteswap_opcode() {
-			instruction = instruction.to_be();
+		println!("I1 {:x}", instruction);
+		if Chip8Instance::is_little_endian() {
+			instruction = instruction.to_be() as u16;
 		}
 
-		let instruction_class = instruction & 0xF000 >> 12;
-		println!("Class: {:x}", instruction_class);
-		match instruction_class {
+		match (instruction & 0xF000) >> 12 {
 			0x0 => self.match_opcode_0(instruction),
 			_ => self.unknown_instruction(instruction),
 		}
