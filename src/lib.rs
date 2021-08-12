@@ -45,18 +45,26 @@ impl Chip8Instance {
 		}
 	}
 
+	fn opc_nnn(instruction: u16) -> u16 {
+		instruction & 0x0FFF
+	}
+
+	fn match_opcode_1(&mut self, instruction: u16) {
+		self.pc = Chip8Instance::opc_nnn(instruction);
+	}
+
 	fn is_little_endian() -> bool {
 		(47 as u16).to_be() != 47
 	}
 
 	pub fn interpret_instruction(&mut self, mut instruction: u16) {
-		println!("I1 {:x}", instruction);
 		if Chip8Instance::is_little_endian() {
 			instruction = instruction.to_be() as u16;
 		}
 
 		match (instruction & 0xF000) >> 12 {
 			0x0 => self.match_opcode_0(instruction),
+			0x1 => self.match_opcode_1(instruction),
 			_ => self.unknown_instruction(instruction),
 		}
 	}
@@ -113,5 +121,15 @@ mod chip8_tests {
 
 		assert_eq!(c8i.pc, 0xDEAD, "Got PC {:x}", c8i.pc);
 		assert_eq!(c8i.stack_ptr, 0xE02);
+	}
+
+	#[test]
+	fn opc_1nnn() {
+		let mut c8i = Chip8Instance::default();
+
+		for i in 0x1000..0x1FFF {
+			interpret_instruction(&mut c8i, i);
+			assert_eq!(c8i.pc, i - 0x1000);
+		}
 	}
 }
