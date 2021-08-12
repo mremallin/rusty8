@@ -9,13 +9,15 @@ pub struct Chip8Instance {
 }
 
 impl Chip8Instance {
+	const STACK_BASE_ADDR: usize = 0xEFE;
+
 	pub fn new() -> Chip8Instance {
 		Chip8Instance {
 			ram: [0; 0x1000],
 			v_regs: [0; 16],
 			i_reg: 0,
 			pc: 0,
-			stack_ptr: 0,
+			stack_ptr: Chip8Instance::STACK_BASE_ADDR,
 			paused_for_key: false,
 			vram: [0; 640 * 320],
 		}
@@ -27,6 +29,12 @@ impl Chip8Instance {
 
 	fn clear_display(&mut self) {
 		self.vram.iter_mut().for_each(|m| *m = 0);
+	}
+
+	fn stack_push(&mut self, val: u16) {
+		self.ram[self.stack_ptr] = ((val & 0xFF00) >> 8) as u8;
+		self.ram[self.stack_ptr + 1] = (val & 0xFF) as u8;
+		self.stack_ptr -= 2;
 	}
 
 	fn stack_pop(&mut self) -> u16 {
@@ -53,6 +61,11 @@ impl Chip8Instance {
 		self.pc = Chip8Instance::opc_nnn(instruction);
 	}
 
+	fn match_opcode_2(&mut self, instruction: u16) {
+		self.stack_push(self.pc);
+		self.pc = Chip8Instance::opc_nnn(instruction);
+	}
+
 	fn is_little_endian() -> bool {
 		(47 as u16).to_be() != 47
 	}
@@ -65,6 +78,7 @@ impl Chip8Instance {
 		match (instruction & 0xF000) >> 12 {
 			0x0 => self.match_opcode_0(instruction),
 			0x1 => self.match_opcode_1(instruction),
+			0x2 => self.match_opcode_2(instruction),
 			_ => self.unknown_instruction(instruction),
 		}
 	}
@@ -78,7 +92,7 @@ impl Default for Chip8Instance {
 			v_regs: [0; 16],
 			i_reg: 0,
 			pc: 0,
-			stack_ptr: 0,
+			stack_ptr: Chip8Instance::STACK_BASE_ADDR,
 			paused_for_key: false,
 			vram: [0; 640 * 320],
 		}
@@ -97,6 +111,7 @@ mod chip8_tests {
 	}
 
 	#[test]
+	/* Clear the display */
 	fn opc_00e0() {
 		let mut c8i = Chip8Instance::default();
 
@@ -110,6 +125,7 @@ mod chip8_tests {
 	}
 
 	#[test]
+	/* Returns from a subroutine */
 	fn opc_00ee() {
 		let mut c8i = Chip8Instance::default();
 
@@ -119,17 +135,35 @@ mod chip8_tests {
 
 		interpret_instruction(&mut c8i, 0x00ee);
 
-		assert_eq!(c8i.pc, 0xDEAD, "Got PC {:x}", c8i.pc);
+		assert_eq!(c8i.pc, 0xDEAD);
 		assert_eq!(c8i.stack_ptr, 0xE02);
 	}
 
 	#[test]
+	/* Jumps to address 0xNNN */
 	fn opc_1nnn() {
 		let mut c8i = Chip8Instance::default();
 
 		for i in 0x1000..0x2000 {
 			interpret_instruction(&mut c8i, i);
 			assert_eq!(c8i.pc, i - 0x1000);
+		}
+	}
+
+	#[test]
+	/* Calls subroutine at 0xNNN */
+	fn opc_2nnn() {
+		let mut c8i = Chip8Instance::default();
+
+		for i in 0x2000..0x3000 {
+			interpret_instruction(&mut c8i, i);
+
+			/* Push current PC on the stack */
+			assert_eq!(c8i.stack_ptr, Chip8Instance::STACK_BASE_ADDR - 2);
+			/* Load PC with 3 nibbles of the op */
+			assert_eq!(c8i.pc, Chip8Instance::opc_nnn(i));
+			/* Return from the subroutine to cleanup */
+			interpret_instruction(&mut c8i, 0x00EE);
 		}
 	}
 }
