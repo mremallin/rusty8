@@ -17,18 +17,6 @@ impl Chip8Instance {
 	const STACK_BASE_ADDR: usize = 0xEFE;
 	const NUM_V_REGISTERS: usize = 16;
 
-	pub fn new() -> Chip8Instance {
-		Chip8Instance {
-			ram: [0; 0x1000],
-			v_regs: [0; Chip8Instance::NUM_V_REGISTERS],
-			i_reg: 0,
-			pc: Chip8Instance::PROGRAM_LOAD_ADDR,
-			stack_ptr: Chip8Instance::STACK_BASE_ADDR,
-			paused_for_key: false,
-			vram: [0; 640 * 320],
-		}
-	}
-
 	fn unknown_instruction(&mut self, instruction: u16) {
 		println!("Unknown instruction decoded: {:04x}", instruction);
 	}
