@@ -127,7 +127,7 @@ mod chip8_tests {
 	fn opc_1nnn() {
 		let mut c8i = Chip8Instance::default();
 
-		for i in 0x1000..0x1FFF {
+		for i in 0x1000..0x2000 {
 			interpret_instruction(&mut c8i, i);
 			assert_eq!(c8i.pc, i - 0x1000);
 		}
