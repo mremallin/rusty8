@@ -9,14 +9,20 @@ pub struct Chip8Instance {
 }
 
 impl Chip8Instance {
+	/* Information from https://en.wikipedia.org/wiki/CHIP-8 */
+	const PROGRAM_LOAD_ADDR: u16 = 0x200;
+	/* 0xEFF is the last valid address in the stack, but because the
+	 * stack stores 16-bit pointers we start at 0xEFE for alignment and to
+	 * not overwrite past the stack boundaries */
 	const STACK_BASE_ADDR: usize = 0xEFE;
+	const NUM_V_REGISTERS: usize = 16;
 
 	pub fn new() -> Chip8Instance {
 		Chip8Instance {
 			ram: [0; 0x1000],
-			v_regs: [0; 16],
+			v_regs: [0; Chip8Instance::NUM_V_REGISTERS],
 			i_reg: 0,
-			pc: 0,
+			pc: Chip8Instance::PROGRAM_LOAD_ADDR,
 			stack_ptr: Chip8Instance::STACK_BASE_ADDR,
 			paused_for_key: false,
 			vram: [0; 640 * 320],
@@ -57,6 +63,14 @@ impl Chip8Instance {
 		instruction & 0x0FFF
 	}
 
+	fn opc_regx(instruction: u16) -> u16 {
+		instruction & 0x0F00 >> 8
+	}
+
+	fn opc_nn(instruction: u16) -> u8 {
+		((instruction & 0xFF) as u8).into()
+	}
+
 	fn match_opcode_1(&mut self, instruction: u16) {
 		self.pc = Chip8Instance::opc_nnn(instruction);
 	}
@@ -64,6 +78,15 @@ impl Chip8Instance {
 	fn match_opcode_2(&mut self, instruction: u16) {
 		self.stack_push(self.pc);
 		self.pc = Chip8Instance::opc_nnn(instruction);
+	}
+
+	fn match_opcode_3(&mut self, instruction: u16) {
+		let vx = Chip8Instance::opc_regx(instruction);
+		let val = Chip8Instance::opc_nn(instruction);
+
+		if self.v_regs[vx as usize] == val {
+			self.pc += 2;
+		}
 	}
 
 	fn is_little_endian() -> bool {
@@ -79,6 +102,7 @@ impl Chip8Instance {
 			0x0 => self.match_opcode_0(instruction),
 			0x1 => self.match_opcode_1(instruction),
 			0x2 => self.match_opcode_2(instruction),
+			0x3 => self.match_opcode_3(instruction),
 			_ => self.unknown_instruction(instruction),
 		}
 	}
@@ -89,9 +113,9 @@ impl Default for Chip8Instance {
 	fn default() -> Chip8Instance {
 		Chip8Instance {
 			ram: [0; 0x1000],
-			v_regs: [0; 16],
+			v_regs: [0; Chip8Instance::NUM_V_REGISTERS],
 			i_reg: 0,
-			pc: 0,
+			pc: Chip8Instance::PROGRAM_LOAD_ADDR,
 			stack_ptr: Chip8Instance::STACK_BASE_ADDR,
 			paused_for_key: false,
 			vram: [0; 640 * 320],
@@ -108,6 +132,10 @@ mod chip8_tests {
 	fn interpret_instruction(c8i: &mut Chip8Instance, instruction: u16) {
 		let bswap_instruction = instruction.to_be();
 		c8i.interpret_instruction(bswap_instruction);
+	}
+
+	fn build_xnn_opc(opc: u8, x: u8, nn: u8) -> u16 {
+		(((opc & 0xF) as u16) << 12 | ((x & 0xF) as u16) << 8 | (nn as u16)).into()
 	}
 
 	#[test]
@@ -164,6 +192,21 @@ mod chip8_tests {
 			assert_eq!(c8i.pc, Chip8Instance::opc_nnn(i));
 			/* Return from the subroutine to cleanup */
 			interpret_instruction(&mut c8i, 0x00EE);
+		}
+	}
+
+	#[test]
+	/* Skips the next instruction if VX equals NN.
+	 * (Usually the next instruction is a jump to skip a code block) */
+	fn opc_3xnn_skip() {
+		let mut c8i = Chip8Instance::default();
+
+		for i in 0..Chip8Instance::NUM_V_REGISTERS {
+			let op = build_xnn_opc(3, i as u8 ,00);
+			interpret_instruction(&mut c8i, op);
+
+			assert_eq!(c8i.pc, 0x202);
+			c8i.pc = Chip8Instance::PROGRAM_LOAD_ADDR;
 		}
 	}
 }
