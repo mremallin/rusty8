@@ -34,7 +34,9 @@ impl Chip8Instance {
 	fn stack_pop(&mut self) -> u16 {
 		self.stack_ptr += 2;
 
-		let word_pop: u16 = (self.ram[self.stack_ptr] as u16) << 8 | (self.ram[self.stack_ptr + 1] as u16);
+		let word_pop: u16 =
+			(self.ram[self.stack_ptr] as u16) << 8 |
+			(self.ram[self.stack_ptr + 1] as u16);
 
 		word_pop
 	}
@@ -123,7 +125,9 @@ mod chip8_tests {
 	}
 
 	fn build_xnn_opc(opc: u8, x: u8, nn: u8) -> u16 {
-		(((opc & 0xF) as u16) << 12 | ((x & 0xF) as u16) << 8 | (nn as u16)).into()
+		(((opc & 0xF) as u16) << 12 |
+		  ((x & 0xF) as u16) << 8 |
+		  (nn as u16)).into()
 	}
 
 	#[test]
@@ -194,6 +198,21 @@ mod chip8_tests {
 			interpret_instruction(&mut c8i, op);
 
 			assert_eq!(c8i.pc, 0x202);
+			c8i.pc = Chip8Instance::PROGRAM_LOAD_ADDR;
+		}
+	}
+
+	#[test]
+	fn opc_3xnn_noskip() {
+		let mut c8i = Chip8Instance::default();
+
+		c8i.v_regs.iter_mut().for_each(|m| *m = 0xff);
+
+		for i in 0..Chip8Instance::NUM_V_REGISTERS {
+			let op = build_xnn_opc(3, i as u8 ,00);
+			interpret_instruction(&mut c8i, op);
+
+			assert_eq!(c8i.pc, 0x200);
 			c8i.pc = Chip8Instance::PROGRAM_LOAD_ADDR;
 		}
 	}
