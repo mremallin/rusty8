@@ -79,6 +79,16 @@ impl Chip8Instance {
 		}
 	}
 
+	fn match_opcode_4(&mut self, instruction: u16) {
+		let vx = Chip8Instance::opc_regx(instruction);
+		let val = Chip8Instance::opc_nn(instruction);
+
+		if self.v_regs[vx as usize] != val {
+			self.pc += 2;
+		}
+
+	}
+
 	fn is_little_endian() -> bool {
 		(47 as u16).to_be() != 47
 	}
@@ -93,6 +103,7 @@ impl Chip8Instance {
 			0x1 => self.match_opcode_1(instruction),
 			0x2 => self.match_opcode_2(instruction),
 			0x3 => self.match_opcode_3(instruction),
+			0x4 => self.match_opcode_4(instruction),
 			_ => self.unknown_instruction(instruction),
 		}
 	}
@@ -194,7 +205,7 @@ mod chip8_tests {
 		let mut c8i = Chip8Instance::default();
 
 		for i in 0..Chip8Instance::NUM_V_REGISTERS {
-			let op = build_xnn_opc(3, i as u8 ,00);
+			let op = build_xnn_opc(3, i as u8, 00);
 			interpret_instruction(&mut c8i, op);
 
 			assert_eq!(c8i.pc, 0x202);
@@ -209,7 +220,35 @@ mod chip8_tests {
 		c8i.v_regs.iter_mut().for_each(|m| *m = 0xff);
 
 		for i in 0..Chip8Instance::NUM_V_REGISTERS {
-			let op = build_xnn_opc(3, i as u8 ,00);
+			let op = build_xnn_opc(3, i as u8, 00);
+			interpret_instruction(&mut c8i, op);
+
+			assert_eq!(c8i.pc, 0x200);
+			c8i.pc = Chip8Instance::PROGRAM_LOAD_ADDR;
+		}
+	}
+
+	#[test]
+    /* Skips the next instruction if VX doesn't equal NN.
+     * (Usually the next instruction is a jump to skip a code block)  */
+	fn opc_4xnn_skip() {
+		let mut c8i = Chip8Instance::default();
+
+		for i in 0..Chip8Instance::NUM_V_REGISTERS {
+			let op = build_xnn_opc(4, i as u8, 0xDE);
+			interpret_instruction(&mut c8i, op);
+
+			assert_eq!(c8i.pc, 0x202);
+			c8i.pc = Chip8Instance::PROGRAM_LOAD_ADDR;
+		}
+	}
+
+	#[test]
+	fn opc_4xnn_noskip() {
+		let mut c8i = Chip8Instance::default();
+
+		for i in 0..Chip8Instance::NUM_V_REGISTERS {
+			let op = build_xnn_opc(4, i as u8, 0);
 			interpret_instruction(&mut c8i, op);
 
 			assert_eq!(c8i.pc, 0x200);
