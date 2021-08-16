@@ -54,7 +54,11 @@ impl Chip8Instance {
 	}
 
 	fn opc_regx(instruction: u16) -> u16 {
-		instruction & 0x0F00 >> 8
+		(instruction & 0x0F00) >> 8
+	}
+
+	fn opc_regy(instruction: u16) -> u16 {
+		(instruction & 0x00F0) >> 4
 	}
 
 	fn opc_nn(instruction: u16) -> u8 {
@@ -86,7 +90,15 @@ impl Chip8Instance {
 		if self.v_regs[vx as usize] != val {
 			self.pc += 2;
 		}
+	}
 
+	fn match_opcode_5(&mut self, instruction: u16) {
+		let vx = Chip8Instance::opc_regx(instruction);
+		let vy = Chip8Instance::opc_regy(instruction);
+
+		if self.v_regs[vx as usize] == self.v_regs[vy as usize] {
+			self.pc += 2;
+		}
 	}
 
 	fn is_little_endian() -> bool {
@@ -104,6 +116,7 @@ impl Chip8Instance {
 			0x2 => self.match_opcode_2(instruction),
 			0x3 => self.match_opcode_3(instruction),
 			0x4 => self.match_opcode_4(instruction),
+			0x5 => self.match_opcode_5(instruction),
 			_ => self.unknown_instruction(instruction),
 		}
 	}
@@ -208,7 +221,7 @@ mod chip8_tests {
 			let op = build_xnn_opc(3, i as u8, 00);
 			interpret_instruction(&mut c8i, op);
 
-			assert_eq!(c8i.pc, 0x202);
+			assert_eq!(c8i.pc, Chip8Instance::PROGRAM_LOAD_ADDR + 2);
 			c8i.pc = Chip8Instance::PROGRAM_LOAD_ADDR;
 		}
 	}
@@ -223,7 +236,7 @@ mod chip8_tests {
 			let op = build_xnn_opc(3, i as u8, 00);
 			interpret_instruction(&mut c8i, op);
 
-			assert_eq!(c8i.pc, 0x200);
+			assert_eq!(c8i.pc, Chip8Instance::PROGRAM_LOAD_ADDR);
 			c8i.pc = Chip8Instance::PROGRAM_LOAD_ADDR;
 		}
 	}
@@ -238,7 +251,7 @@ mod chip8_tests {
 			let op = build_xnn_opc(4, i as u8, 0xDE);
 			interpret_instruction(&mut c8i, op);
 
-			assert_eq!(c8i.pc, 0x202);
+			assert_eq!(c8i.pc, Chip8Instance::PROGRAM_LOAD_ADDR + 2);
 			c8i.pc = Chip8Instance::PROGRAM_LOAD_ADDR;
 		}
 	}
@@ -251,8 +264,59 @@ mod chip8_tests {
 			let op = build_xnn_opc(4, i as u8, 0);
 			interpret_instruction(&mut c8i, op);
 
-			assert_eq!(c8i.pc, 0x200);
+			assert_eq!(c8i.pc, Chip8Instance::PROGRAM_LOAD_ADDR);
 			c8i.pc = Chip8Instance::PROGRAM_LOAD_ADDR;
+		}
+	}
+
+	#[test]
+    /* Skips the next instruction if VX equals VY.
+     * (Usually the next instruction is a jump to skip a code block)  */
+	fn opc_5xy0_skip() {
+		let mut c8i = Chip8Instance::default();
+
+    	/* Test each register behaves the same */
+		for i in (0x5000..0x6000).step_by(0x100) {
+			for j in (0..0x00F0).step_by(0x10) {
+				let op = (i & 0xFF00) | j;
+				interpret_instruction(&mut c8i, op);
+
+            	/* Match, so PC should be incremented again. */
+				assert_eq!(c8i.pc, Chip8Instance::PROGRAM_LOAD_ADDR + 2);
+
+            	/* Reset for next instruction */
+				c8i.pc = Chip8Instance::PROGRAM_LOAD_ADDR;
+			}
+		}
+	}
+
+	#[test]
+    /* Skips the next instruction if VX equals VY.
+     * (Usually the next instruction is a jump to skip a code block)  */
+	fn opc_5xy0_noskip() {
+		let mut c8i = Chip8Instance::default();
+
+    	/* Test each register behaves the same */
+		for i in (0x5000..0x5FFF).step_by(0x100) {
+			for j in (0..0x00F0).step_by(0x10) {
+				let op = (i & 0xFF00) | j;
+
+            	/* Ensure that VI != VJ */
+				if (i & 0x0F00) >> 4 == j {
+					interpret_instruction(&mut c8i, op);
+                	/* X == Y so the contents of the register is guaranteed to
+                 	 * be identical */
+					assert_eq!(c8i.pc, Chip8Instance::PROGRAM_LOAD_ADDR + 2);
+				} else {
+					c8i.v_regs[((i & 0x0F00) >> 8) as usize] = 1;
+					c8i.v_regs[(j >> 4) as usize] = 0x2;
+					interpret_instruction(&mut c8i, op);
+                	/* No match, so PC should not be incremented. */
+					assert_eq!(c8i.pc, Chip8Instance::PROGRAM_LOAD_ADDR);
+				}
+
+				c8i.pc = Chip8Instance::PROGRAM_LOAD_ADDR;
+			}
 		}
 	}
 }
