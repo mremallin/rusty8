@@ -52,8 +52,8 @@ impl Chip8Instance {
         instruction & 0x0FFF
     }
 
-    fn opc_regx(instruction: u16) -> u16 {
-        (instruction & 0x0F00) >> 8
+    fn opc_regx(instruction: u16) -> usize {
+        ((instruction & 0x0F00) >> 8).into()
     }
 
     fn opc_regy(instruction: u16) -> u16 {
@@ -77,7 +77,7 @@ impl Chip8Instance {
         let vx = Chip8Instance::opc_regx(instruction);
         let val = Chip8Instance::opc_nn(instruction);
 
-        if self.v_regs[vx as usize] == val {
+        if self.v_regs[vx] == val {
             self.pc += 2;
         }
     }
@@ -86,7 +86,7 @@ impl Chip8Instance {
         let vx = Chip8Instance::opc_regx(instruction);
         let val = Chip8Instance::opc_nn(instruction);
 
-        if self.v_regs[vx as usize] != val {
+        if self.v_regs[vx] != val {
             self.pc += 2;
         }
     }
@@ -95,7 +95,7 @@ impl Chip8Instance {
         let vx = Chip8Instance::opc_regx(instruction);
         let vy = Chip8Instance::opc_regy(instruction);
 
-        if self.v_regs[vx as usize] == self.v_regs[vy as usize] {
+        if self.v_regs[vx] == self.v_regs[vy as usize] {
             self.pc += 2;
         }
     }
@@ -104,27 +104,27 @@ impl Chip8Instance {
         let vx = Chip8Instance::opc_regx(instruction);
         let nn = Chip8Instance::opc_nn(instruction);
 
-        self.v_regs[vx as usize] = nn;
+        self.v_regs[vx] = nn;
     }
 
     fn match_opcode_7(&mut self, instruction: u16) {
         let vx = Chip8Instance::opc_regx(instruction);
         let nn = Chip8Instance::opc_nn(instruction);
 
-        self.v_regs[vx as usize] = u8::wrapping_add(self.v_regs[vx as usize], nn);
+        self.v_regs[vx] = u8::wrapping_add(self.v_regs[vx], nn);
     }
 
     fn match_opcode_8(&mut self, instruction: u16) {
         match instruction & 0xF {
             /* LD Vx, Vy - Set Vx = Vy. */
             0 => {
-                self.v_regs[Chip8Instance::opc_regx(instruction) as usize] =
+                self.v_regs[Chip8Instance::opc_regx(instruction)] =
                     self.v_regs[Chip8Instance::opc_regy(instruction) as usize]
             }
             /* OR Vx, Vy - Set Vx = Vx OR Vy. */
             1 => {
-                self.v_regs[Chip8Instance::opc_regx(instruction) as usize] = self.v_regs
-                    [Chip8Instance::opc_regx(instruction) as usize]
+                self.v_regs[Chip8Instance::opc_regx(instruction)] = self.v_regs
+                    [Chip8Instance::opc_regx(instruction)]
                     | self.v_regs[Chip8Instance::opc_regy(instruction) as usize]
             }
             _ => self.unknown_instruction(instruction),
@@ -359,7 +359,7 @@ mod chip8_tests {
         for i in 0x6000..0x7000 {
             interpret_instruction(&mut c8i, i);
             assert_eq!(
-                c8i.v_regs[Chip8Instance::opc_regx(i) as usize],
+                c8i.v_regs[Chip8Instance::opc_regx(i)],
                 Chip8Instance::opc_nn(i)
             );
         }
@@ -375,7 +375,7 @@ mod chip8_tests {
 
             interpret_instruction(&mut c8i, i);
             assert_eq!(
-                c8i.v_regs[Chip8Instance::opc_regx(i) as usize],
+                c8i.v_regs[Chip8Instance::opc_regx(i)],
                 u8::wrapping_add(Chip8Instance::opc_nn(i), 5)
             );
             if (i & 0x0F00) != 0x0F00 {
