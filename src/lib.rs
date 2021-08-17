@@ -1,367 +1,367 @@
 pub struct Chip8Instance {
-	ram: [u8; 0x1000],
-	v_regs: [u8; 16],
-	i_reg: u16,
-	pc: u16,
-	stack_ptr: usize,
-	paused_for_key: bool,
-	vram: [u8; 640 * 320],
+    ram: [u8; 0x1000],
+    v_regs: [u8; 16],
+    i_reg: u16,
+    pc: u16,
+    stack_ptr: usize,
+    paused_for_key: bool,
+    vram: [u8; 640 * 320],
 }
 
 impl Chip8Instance {
-	/* Information from https://en.wikipedia.org/wiki/CHIP-8 */
-	const PROGRAM_LOAD_ADDR: u16 = 0x200;
-	/* 0xEFF is the last valid address in the stack, but because the
-	 * stack stores 16-bit pointers we start at 0xEFE for alignment and to
-	 * not overwrite past the stack boundaries */
-	const STACK_BASE_ADDR: usize = 0xEFE;
-	const NUM_V_REGISTERS: usize = 16;
+    /* Information from https://en.wikipedia.org/wiki/CHIP-8 */
+    const PROGRAM_LOAD_ADDR: u16 = 0x200;
+    /* 0xEFF is the last valid address in the stack, but because the
+     * stack stores 16-bit pointers we start at 0xEFE for alignment and to
+     * not overwrite past the stack boundaries */
+    const STACK_BASE_ADDR: usize = 0xEFE;
+    const NUM_V_REGISTERS: usize = 16;
 
-	fn unknown_instruction(&mut self, instruction: u16) {
-		println!("Unknown instruction decoded: {:04x}", instruction);
-	}
+    fn unknown_instruction(&mut self, instruction: u16) {
+        println!("Unknown instruction decoded: {:04x}", instruction);
+    }
 
-	fn clear_display(&mut self) {
-		self.vram.iter_mut().for_each(|m| *m = 0);
-	}
+    fn clear_display(&mut self) {
+        self.vram.iter_mut().for_each(|m| *m = 0);
+    }
 
-	fn stack_push(&mut self, val: u16) {
-		self.ram[self.stack_ptr] = ((val & 0xFF00) >> 8) as u8;
-		self.ram[self.stack_ptr + 1] = (val & 0xFF) as u8;
-		self.stack_ptr -= 2;
-	}
+    fn stack_push(&mut self, val: u16) {
+        self.ram[self.stack_ptr] = ((val & 0xFF00) >> 8) as u8;
+        self.ram[self.stack_ptr + 1] = (val & 0xFF) as u8;
+        self.stack_ptr -= 2;
+    }
 
-	fn stack_pop(&mut self) -> u16 {
-		self.stack_ptr += 2;
+    fn stack_pop(&mut self) -> u16 {
+        self.stack_ptr += 2;
 
-		let word_pop: u16 =
-			(self.ram[self.stack_ptr] as u16) << 8 |
-			(self.ram[self.stack_ptr + 1] as u16);
+        let word_pop: u16 =
+            (self.ram[self.stack_ptr] as u16) << 8 |
+            (self.ram[self.stack_ptr + 1] as u16);
 
-		word_pop
-	}
+        word_pop
+    }
 
-	fn match_opcode_0(&mut self, instruction: u16) {
-		match instruction {
-			0x00e0 => self.clear_display(),
-			0x00ee => self.pc = self.stack_pop(),
-			_ => self.unknown_instruction(instruction),
-		}
-	}
+    fn match_opcode_0(&mut self, instruction: u16) {
+        match instruction {
+            0x00e0 => self.clear_display(),
+            0x00ee => self.pc = self.stack_pop(),
+            _ => self.unknown_instruction(instruction),
+        }
+    }
 
-	fn opc_nnn(instruction: u16) -> u16 {
-		instruction & 0x0FFF
-	}
+    fn opc_nnn(instruction: u16) -> u16 {
+        instruction & 0x0FFF
+    }
 
-	fn opc_regx(instruction: u16) -> u16 {
-		(instruction & 0x0F00) >> 8
-	}
+    fn opc_regx(instruction: u16) -> u16 {
+        (instruction & 0x0F00) >> 8
+    }
 
-	fn opc_regy(instruction: u16) -> u16 {
-		(instruction & 0x00F0) >> 4
-	}
+    fn opc_regy(instruction: u16) -> u16 {
+        (instruction & 0x00F0) >> 4
+    }
 
-	fn opc_nn(instruction: u16) -> u8 {
-		((instruction & 0xFF) as u8).into()
-	}
+    fn opc_nn(instruction: u16) -> u8 {
+        ((instruction & 0xFF) as u8).into()
+    }
 
-	fn match_opcode_1(&mut self, instruction: u16) {
-		self.pc = Chip8Instance::opc_nnn(instruction);
-	}
+    fn match_opcode_1(&mut self, instruction: u16) {
+        self.pc = Chip8Instance::opc_nnn(instruction);
+    }
 
-	fn match_opcode_2(&mut self, instruction: u16) {
-		self.stack_push(self.pc);
-		self.pc = Chip8Instance::opc_nnn(instruction);
-	}
+    fn match_opcode_2(&mut self, instruction: u16) {
+        self.stack_push(self.pc);
+        self.pc = Chip8Instance::opc_nnn(instruction);
+    }
 
-	fn match_opcode_3(&mut self, instruction: u16) {
-		let vx = Chip8Instance::opc_regx(instruction);
-		let val = Chip8Instance::opc_nn(instruction);
+    fn match_opcode_3(&mut self, instruction: u16) {
+        let vx = Chip8Instance::opc_regx(instruction);
+        let val = Chip8Instance::opc_nn(instruction);
 
-		if self.v_regs[vx as usize] == val {
-			self.pc += 2;
-		}
-	}
+        if self.v_regs[vx as usize] == val {
+            self.pc += 2;
+        }
+    }
 
-	fn match_opcode_4(&mut self, instruction: u16) {
-		let vx = Chip8Instance::opc_regx(instruction);
-		let val = Chip8Instance::opc_nn(instruction);
+    fn match_opcode_4(&mut self, instruction: u16) {
+        let vx = Chip8Instance::opc_regx(instruction);
+        let val = Chip8Instance::opc_nn(instruction);
 
-		if self.v_regs[vx as usize] != val {
-			self.pc += 2;
-		}
-	}
+        if self.v_regs[vx as usize] != val {
+            self.pc += 2;
+        }
+    }
 
-	fn match_opcode_5(&mut self, instruction: u16) {
-		let vx = Chip8Instance::opc_regx(instruction);
-		let vy = Chip8Instance::opc_regy(instruction);
+    fn match_opcode_5(&mut self, instruction: u16) {
+        let vx = Chip8Instance::opc_regx(instruction);
+        let vy = Chip8Instance::opc_regy(instruction);
 
-		if self.v_regs[vx as usize] == self.v_regs[vy as usize] {
-			self.pc += 2;
-		}
-	}
+        if self.v_regs[vx as usize] == self.v_regs[vy as usize] {
+            self.pc += 2;
+        }
+    }
 
-	fn match_opcode_6(&mut self, instruction: u16) {
-		let vx = Chip8Instance::opc_regx(instruction);
-		let nn = Chip8Instance::opc_nn(instruction);
+    fn match_opcode_6(&mut self, instruction: u16) {
+        let vx = Chip8Instance::opc_regx(instruction);
+        let nn = Chip8Instance::opc_nn(instruction);
 
-		self.v_regs[vx as usize] = nn;
-	}
+        self.v_regs[vx as usize] = nn;
+    }
 
-	fn match_opcode_7(&mut self, instruction: u16) {
-		let vx = Chip8Instance::opc_regx(instruction);
-		let nn = Chip8Instance::opc_nn(instruction);
+    fn match_opcode_7(&mut self, instruction: u16) {
+        let vx = Chip8Instance::opc_regx(instruction);
+        let nn = Chip8Instance::opc_nn(instruction);
 
-		self.v_regs[vx as usize] = u8::wrapping_add(self.v_regs[vx as usize], nn);
-	}
+        self.v_regs[vx as usize] = u8::wrapping_add(self.v_regs[vx as usize], nn);
+    }
 
-	fn is_little_endian() -> bool {
-		(47 as u16).to_be() != 47
-	}
+    fn is_little_endian() -> bool {
+        (47 as u16).to_be() != 47
+    }
 
-	pub fn interpret_instruction(&mut self, mut instruction: u16) {
-		if Chip8Instance::is_little_endian() {
-			instruction = instruction.to_be() as u16;
-		}
+    pub fn interpret_instruction(&mut self, mut instruction: u16) {
+        if Chip8Instance::is_little_endian() {
+            instruction = instruction.to_be() as u16;
+        }
 
-		match (instruction & 0xF000) >> 12 {
-			0x0 => self.match_opcode_0(instruction),
-			0x1 => self.match_opcode_1(instruction),
-			0x2 => self.match_opcode_2(instruction),
-			0x3 => self.match_opcode_3(instruction),
-			0x4 => self.match_opcode_4(instruction),
-			0x5 => self.match_opcode_5(instruction),
-			0x6 => self.match_opcode_6(instruction),
-			0x7 => self.match_opcode_7(instruction),
-			_ => self.unknown_instruction(instruction),
-		}
-	}
+        match (instruction & 0xF000) >> 12 {
+            0x0 => self.match_opcode_0(instruction),
+            0x1 => self.match_opcode_1(instruction),
+            0x2 => self.match_opcode_2(instruction),
+            0x3 => self.match_opcode_3(instruction),
+            0x4 => self.match_opcode_4(instruction),
+            0x5 => self.match_opcode_5(instruction),
+            0x6 => self.match_opcode_6(instruction),
+            0x7 => self.match_opcode_7(instruction),
+            _ => self.unknown_instruction(instruction),
+        }
+    }
 }
 
 /* Default used for UT purposes */
 impl Default for Chip8Instance {
-	fn default() -> Chip8Instance {
-		Chip8Instance {
-			ram: [0; 0x1000],
-			v_regs: [0; Chip8Instance::NUM_V_REGISTERS],
-			i_reg: 0,
-			pc: Chip8Instance::PROGRAM_LOAD_ADDR,
-			stack_ptr: Chip8Instance::STACK_BASE_ADDR,
-			paused_for_key: false,
-			vram: [0; 640 * 320],
-		}
-	}
+    fn default() -> Chip8Instance {
+        Chip8Instance {
+            ram: [0; 0x1000],
+            v_regs: [0; Chip8Instance::NUM_V_REGISTERS],
+            i_reg: 0,
+            pc: Chip8Instance::PROGRAM_LOAD_ADDR,
+            stack_ptr: Chip8Instance::STACK_BASE_ADDR,
+            paused_for_key: false,
+            vram: [0; 640 * 320],
+        }
+    }
 }
 
 #[cfg(test)]
 mod chip8_tests {
-	use crate::Chip8Instance;
+    use crate::Chip8Instance;
 
-	/* CHIP8 operates with Big-Endian data so for test convenience, handle
-	 * the byteswap of the instruction for test readability */
-	fn interpret_instruction(c8i: &mut Chip8Instance, instruction: u16) {
-		let bswap_instruction = instruction.to_be();
-		c8i.interpret_instruction(bswap_instruction);
-	}
+    /* CHIP8 operates with Big-Endian data so for test convenience, handle
+     * the byteswap of the instruction for test readability */
+    fn interpret_instruction(c8i: &mut Chip8Instance, instruction: u16) {
+        let bswap_instruction = instruction.to_be();
+        c8i.interpret_instruction(bswap_instruction);
+    }
 
-	fn build_xnn_opc(opc: u8, x: u8, nn: u8) -> u16 {
-		(((opc & 0xF) as u16) << 12 |
-		  ((x & 0xF) as u16) << 8 |
-		  (nn as u16)).into()
-	}
+    fn build_xnn_opc(opc: u8, x: u8, nn: u8) -> u16 {
+        (((opc & 0xF) as u16) << 12 |
+          ((x & 0xF) as u16) << 8 |
+          (nn as u16)).into()
+    }
 
-	#[test]
-	/* Clear the display */
-	fn opc_00e0() {
-		let mut c8i = Chip8Instance::default();
+    #[test]
+    /* Clear the display */
+    fn opc_00e0() {
+        let mut c8i = Chip8Instance::default();
 
-		c8i.vram.iter_mut().for_each(|m| *m = 0xff);
+        c8i.vram.iter_mut().for_each(|m| *m = 0xff);
 
-		interpret_instruction(&mut c8i, 0x00e0);
+        interpret_instruction(&mut c8i, 0x00e0);
 
-		for (i, elem) in c8i.vram.iter().enumerate() {
-			assert_eq!(*elem, 0, "VRAM was not cleared at byte {}", i);
-		}
-	}
+        for (i, elem) in c8i.vram.iter().enumerate() {
+            assert_eq!(*elem, 0, "VRAM was not cleared at byte {}", i);
+        }
+    }
 
-	#[test]
-	/* Returns from a subroutine */
-	fn opc_00ee() {
-		let mut c8i = Chip8Instance::default();
+    #[test]
+    /* Returns from a subroutine */
+    fn opc_00ee() {
+        let mut c8i = Chip8Instance::default();
 
-		c8i.stack_ptr = 0xe00;
-		c8i.ram[c8i.stack_ptr + 2] = 0xDE;
-		c8i.ram[c8i.stack_ptr + 3] = 0xAD;
+        c8i.stack_ptr = 0xe00;
+        c8i.ram[c8i.stack_ptr + 2] = 0xDE;
+        c8i.ram[c8i.stack_ptr + 3] = 0xAD;
 
-		interpret_instruction(&mut c8i, 0x00ee);
+        interpret_instruction(&mut c8i, 0x00ee);
 
-		assert_eq!(c8i.pc, 0xDEAD);
-		assert_eq!(c8i.stack_ptr, 0xE02);
-	}
+        assert_eq!(c8i.pc, 0xDEAD);
+        assert_eq!(c8i.stack_ptr, 0xE02);
+    }
 
-	#[test]
-	/* Jumps to address 0xNNN */
-	fn opc_1nnn() {
-		let mut c8i = Chip8Instance::default();
+    #[test]
+    /* Jumps to address 0xNNN */
+    fn opc_1nnn() {
+        let mut c8i = Chip8Instance::default();
 
-		for i in 0x1000..0x2000 {
-			interpret_instruction(&mut c8i, i);
-			assert_eq!(c8i.pc, i - 0x1000);
-		}
-	}
+        for i in 0x1000..0x2000 {
+            interpret_instruction(&mut c8i, i);
+            assert_eq!(c8i.pc, i - 0x1000);
+        }
+    }
 
-	#[test]
-	/* Calls subroutine at 0xNNN */
-	fn opc_2nnn() {
-		let mut c8i = Chip8Instance::default();
+    #[test]
+    /* Calls subroutine at 0xNNN */
+    fn opc_2nnn() {
+        let mut c8i = Chip8Instance::default();
 
-		for i in 0x2000..0x3000 {
-			interpret_instruction(&mut c8i, i);
+        for i in 0x2000..0x3000 {
+            interpret_instruction(&mut c8i, i);
 
-			/* Push current PC on the stack */
-			assert_eq!(c8i.stack_ptr, Chip8Instance::STACK_BASE_ADDR - 2);
-			/* Load PC with 3 nibbles of the op */
-			assert_eq!(c8i.pc, Chip8Instance::opc_nnn(i));
-			/* Return from the subroutine to cleanup */
-			interpret_instruction(&mut c8i, 0x00EE);
-		}
-	}
+            /* Push current PC on the stack */
+            assert_eq!(c8i.stack_ptr, Chip8Instance::STACK_BASE_ADDR - 2);
+            /* Load PC with 3 nibbles of the op */
+            assert_eq!(c8i.pc, Chip8Instance::opc_nnn(i));
+            /* Return from the subroutine to cleanup */
+            interpret_instruction(&mut c8i, 0x00EE);
+        }
+    }
 
-	#[test]
-	/* Skips the next instruction if VX equals NN.
-	 * (Usually the next instruction is a jump to skip a code block) */
-	fn opc_3xnn_skip() {
-		let mut c8i = Chip8Instance::default();
+    #[test]
+    /* Skips the next instruction if VX equals NN.
+     * (Usually the next instruction is a jump to skip a code block) */
+    fn opc_3xnn_skip() {
+        let mut c8i = Chip8Instance::default();
 
-		for i in 0..Chip8Instance::NUM_V_REGISTERS {
-			let op = build_xnn_opc(3, i as u8, 00);
-			interpret_instruction(&mut c8i, op);
+        for i in 0..Chip8Instance::NUM_V_REGISTERS {
+            let op = build_xnn_opc(3, i as u8, 00);
+            interpret_instruction(&mut c8i, op);
 
-			assert_eq!(c8i.pc, Chip8Instance::PROGRAM_LOAD_ADDR + 2);
-			c8i.pc = Chip8Instance::PROGRAM_LOAD_ADDR;
-		}
-	}
+            assert_eq!(c8i.pc, Chip8Instance::PROGRAM_LOAD_ADDR + 2);
+            c8i.pc = Chip8Instance::PROGRAM_LOAD_ADDR;
+        }
+    }
 
-	#[test]
-	fn opc_3xnn_noskip() {
-		let mut c8i = Chip8Instance::default();
+    #[test]
+    fn opc_3xnn_noskip() {
+        let mut c8i = Chip8Instance::default();
 
-		c8i.v_regs.iter_mut().for_each(|m| *m = 0xff);
+        c8i.v_regs.iter_mut().for_each(|m| *m = 0xff);
 
-		for i in 0..Chip8Instance::NUM_V_REGISTERS {
-			let op = build_xnn_opc(3, i as u8, 00);
-			interpret_instruction(&mut c8i, op);
+        for i in 0..Chip8Instance::NUM_V_REGISTERS {
+            let op = build_xnn_opc(3, i as u8, 00);
+            interpret_instruction(&mut c8i, op);
 
-			assert_eq!(c8i.pc, Chip8Instance::PROGRAM_LOAD_ADDR);
-			c8i.pc = Chip8Instance::PROGRAM_LOAD_ADDR;
-		}
-	}
+            assert_eq!(c8i.pc, Chip8Instance::PROGRAM_LOAD_ADDR);
+            c8i.pc = Chip8Instance::PROGRAM_LOAD_ADDR;
+        }
+    }
 
-	#[test]
+    #[test]
     /* Skips the next instruction if VX doesn't equal NN.
      * (Usually the next instruction is a jump to skip a code block)  */
-	fn opc_4xnn_skip() {
-		let mut c8i = Chip8Instance::default();
+    fn opc_4xnn_skip() {
+        let mut c8i = Chip8Instance::default();
 
-		for i in 0..Chip8Instance::NUM_V_REGISTERS {
-			let op = build_xnn_opc(4, i as u8, 0xDE);
-			interpret_instruction(&mut c8i, op);
+        for i in 0..Chip8Instance::NUM_V_REGISTERS {
+            let op = build_xnn_opc(4, i as u8, 0xDE);
+            interpret_instruction(&mut c8i, op);
 
-			assert_eq!(c8i.pc, Chip8Instance::PROGRAM_LOAD_ADDR + 2);
-			c8i.pc = Chip8Instance::PROGRAM_LOAD_ADDR;
-		}
-	}
+            assert_eq!(c8i.pc, Chip8Instance::PROGRAM_LOAD_ADDR + 2);
+            c8i.pc = Chip8Instance::PROGRAM_LOAD_ADDR;
+        }
+    }
 
-	#[test]
-	fn opc_4xnn_noskip() {
-		let mut c8i = Chip8Instance::default();
+    #[test]
+    fn opc_4xnn_noskip() {
+        let mut c8i = Chip8Instance::default();
 
-		for i in 0..Chip8Instance::NUM_V_REGISTERS {
-			let op = build_xnn_opc(4, i as u8, 0);
-			interpret_instruction(&mut c8i, op);
+        for i in 0..Chip8Instance::NUM_V_REGISTERS {
+            let op = build_xnn_opc(4, i as u8, 0);
+            interpret_instruction(&mut c8i, op);
 
-			assert_eq!(c8i.pc, Chip8Instance::PROGRAM_LOAD_ADDR);
-			c8i.pc = Chip8Instance::PROGRAM_LOAD_ADDR;
-		}
-	}
+            assert_eq!(c8i.pc, Chip8Instance::PROGRAM_LOAD_ADDR);
+            c8i.pc = Chip8Instance::PROGRAM_LOAD_ADDR;
+        }
+    }
 
-	#[test]
+    #[test]
     /* Skips the next instruction if VX equals VY.
      * (Usually the next instruction is a jump to skip a code block)  */
-	fn opc_5xy0_skip() {
-		let mut c8i = Chip8Instance::default();
+    fn opc_5xy0_skip() {
+        let mut c8i = Chip8Instance::default();
 
-    	/* Test each register behaves the same */
-		for i in (0x5000..0x6000).step_by(0x100) {
-			for j in (0..0x00F0).step_by(0x10) {
-				let op = (i & 0xFF00) | j;
-				interpret_instruction(&mut c8i, op);
+        /* Test each register behaves the same */
+        for i in (0x5000..0x6000).step_by(0x100) {
+            for j in (0..0x00F0).step_by(0x10) {
+                let op = (i & 0xFF00) | j;
+                interpret_instruction(&mut c8i, op);
 
-            	/* Match, so PC should be incremented again. */
-				assert_eq!(c8i.pc, Chip8Instance::PROGRAM_LOAD_ADDR + 2);
+                /* Match, so PC should be incremented again. */
+                assert_eq!(c8i.pc, Chip8Instance::PROGRAM_LOAD_ADDR + 2);
 
-            	/* Reset for next instruction */
-				c8i.pc = Chip8Instance::PROGRAM_LOAD_ADDR;
-			}
-		}
-	}
+                /* Reset for next instruction */
+                c8i.pc = Chip8Instance::PROGRAM_LOAD_ADDR;
+            }
+        }
+    }
 
-	#[test]
+    #[test]
     /* Skips the next instruction if VX equals VY.
      * (Usually the next instruction is a jump to skip a code block)  */
-	fn opc_5xy0_noskip() {
-		let mut c8i = Chip8Instance::default();
+    fn opc_5xy0_noskip() {
+        let mut c8i = Chip8Instance::default();
 
-    	/* Test each register behaves the same */
-		for i in (0x5000..0x5FFF).step_by(0x100) {
-			for j in (0..0x00F0).step_by(0x10) {
-				let op = (i & 0xFF00) | j;
+        /* Test each register behaves the same */
+        for i in (0x5000..0x5FFF).step_by(0x100) {
+            for j in (0..0x00F0).step_by(0x10) {
+                let op = (i & 0xFF00) | j;
 
-            	/* Ensure that VI != VJ */
-				if (i & 0x0F00) >> 4 == j {
-					interpret_instruction(&mut c8i, op);
-                	/* X == Y so the contents of the register is guaranteed to
-                 	 * be identical */
-					assert_eq!(c8i.pc, Chip8Instance::PROGRAM_LOAD_ADDR + 2);
-				} else {
-					c8i.v_regs[((i & 0x0F00) >> 8) as usize] = 1;
-					c8i.v_regs[(j >> 4) as usize] = 0x2;
-					interpret_instruction(&mut c8i, op);
-                	/* No match, so PC should not be incremented. */
-					assert_eq!(c8i.pc, Chip8Instance::PROGRAM_LOAD_ADDR);
-				}
+                /* Ensure that VI != VJ */
+                if (i & 0x0F00) >> 4 == j {
+                    interpret_instruction(&mut c8i, op);
+                    /* X == Y so the contents of the register is guaranteed to
+                     * be identical */
+                    assert_eq!(c8i.pc, Chip8Instance::PROGRAM_LOAD_ADDR + 2);
+                } else {
+                    c8i.v_regs[((i & 0x0F00) >> 8) as usize] = 1;
+                    c8i.v_regs[(j >> 4) as usize] = 0x2;
+                    interpret_instruction(&mut c8i, op);
+                    /* No match, so PC should not be incremented. */
+                    assert_eq!(c8i.pc, Chip8Instance::PROGRAM_LOAD_ADDR);
+                }
 
-				c8i.pc = Chip8Instance::PROGRAM_LOAD_ADDR;
-			}
-		}
-	}
+                c8i.pc = Chip8Instance::PROGRAM_LOAD_ADDR;
+            }
+        }
+    }
 
-	#[test]
-	/* Sets Vx to NN */
-	fn opc_6xnn() {
-		let mut c8i = Chip8Instance::default();
+    #[test]
+    /* Sets Vx to NN */
+    fn opc_6xnn() {
+        let mut c8i = Chip8Instance::default();
 
-		for i in 0x6000..0x7000 {
-			interpret_instruction(&mut c8i, i);
-			assert_eq!(c8i.v_regs[Chip8Instance::opc_regx(i) as usize],
-					   Chip8Instance::opc_nn(i));
-		}
-	}
+        for i in 0x6000..0x7000 {
+            interpret_instruction(&mut c8i, i);
+            assert_eq!(c8i.v_regs[Chip8Instance::opc_regx(i) as usize],
+                       Chip8Instance::opc_nn(i));
+        }
+    }
 
-	#[test]
+    #[test]
     /* Adds NN to VX. (Carry flag is not changed)  */
     fn opc_7xnn() {
-    	let mut c8i = Chip8Instance::default();
+        let mut c8i = Chip8Instance::default();
 
-    	for i in 0x7000..0x8000 {
-    		c8i.v_regs[((i & 0x0F00) >> 8) as usize] = 5;
+        for i in 0x7000..0x8000 {
+            c8i.v_regs[((i & 0x0F00) >> 8) as usize] = 5;
 
-    		interpret_instruction(&mut c8i, i);
-    		assert_eq!(c8i.v_regs[Chip8Instance::opc_regx(i) as usize],
-    				   u8::wrapping_add(Chip8Instance::opc_nn(i), 5));
-    		if (i & 0x0F00) != 0x0F00 {
-    			assert_eq!(c8i.v_regs[0xF], 0);
-    		}
-    	}
+            interpret_instruction(&mut c8i, i);
+            assert_eq!(c8i.v_regs[Chip8Instance::opc_regx(i) as usize],
+                       u8::wrapping_add(Chip8Instance::opc_nn(i), 5));
+            if (i & 0x0F00) != 0x0F00 {
+                assert_eq!(c8i.v_regs[0xF], 0);
+            }
+        }
     }
 }
