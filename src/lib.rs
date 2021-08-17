@@ -108,6 +108,13 @@ impl Chip8Instance {
 		self.v_regs[vx as usize] = nn;
 	}
 
+	fn match_opcode_7(&mut self, instruction: u16) {
+		let vx = Chip8Instance::opc_regx(instruction);
+		let nn = Chip8Instance::opc_nn(instruction);
+
+		self.v_regs[vx as usize] = u8::wrapping_add(self.v_regs[vx as usize], nn);
+	}
+
 	fn is_little_endian() -> bool {
 		(47 as u16).to_be() != 47
 	}
@@ -125,6 +132,7 @@ impl Chip8Instance {
 			0x4 => self.match_opcode_4(instruction),
 			0x5 => self.match_opcode_5(instruction),
 			0x6 => self.match_opcode_6(instruction),
+			0x7 => self.match_opcode_7(instruction),
 			_ => self.unknown_instruction(instruction),
 		}
 	}
@@ -339,4 +347,21 @@ mod chip8_tests {
 					   Chip8Instance::opc_nn(i));
 		}
 	}
+
+	#[test]
+    /* Adds NN to VX. (Carry flag is not changed)  */
+    fn opc_7xnn() {
+    	let mut c8i = Chip8Instance::default();
+
+    	for i in 0x7000..0x8000 {
+    		c8i.v_regs[((i & 0x0F00) >> 8) as usize] = 5;
+
+    		interpret_instruction(&mut c8i, i);
+    		assert_eq!(c8i.v_regs[Chip8Instance::opc_regx(i) as usize],
+    				   u8::wrapping_add(Chip8Instance::opc_nn(i), 5));
+    		if (i & 0x0F00) != 0x0F00 {
+    			assert_eq!(c8i.v_regs[0xF], 0);
+    		}
+    	}
+    }
 }
