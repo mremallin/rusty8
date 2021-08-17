@@ -115,6 +115,15 @@ impl Chip8Instance {
         self.v_regs[vx as usize] = u8::wrapping_add(self.v_regs[vx as usize], nn);
     }
 
+    fn match_opcode_8(&mut self, instruction: u16) {
+        match instruction & 0xF {
+            /* LD Vx, Vy - Set Vx = Vy. */
+            0 => self.v_regs[Chip8Instance::opc_regx(instruction) as usize] = self.v_regs[Chip8Instance::opc_regy(instruction) as usize],
+            _ => self.unknown_instruction(instruction),
+        }
+
+    }
+
     fn is_little_endian() -> bool {
         (47 as u16).to_be() != 47
     }
@@ -133,6 +142,7 @@ impl Chip8Instance {
             0x5 => self.match_opcode_5(instruction),
             0x6 => self.match_opcode_6(instruction),
             0x7 => self.match_opcode_7(instruction),
+            0x8 => self.match_opcode_8(instruction),
             _ => self.unknown_instruction(instruction),
         }
     }
@@ -361,6 +371,27 @@ mod chip8_tests {
                        u8::wrapping_add(Chip8Instance::opc_nn(i), 5));
             if (i & 0x0F00) != 0x0F00 {
                 assert_eq!(c8i.v_regs[0xF], 0);
+            }
+        }
+    }
+
+    #[test]
+    /* Sets VX to the value of VY. */
+    fn opc_8xy0() {
+        let mut c8i = Chip8Instance::default();
+
+        for i in (0x8001..0x9000).step_by(0x100) {
+            for j in (0..0xF1).step_by(0x10) {
+                let op = (i & 0xff00) | j;
+
+                /* Set destination with a known value */
+                interpret_instruction(&mut c8i, 0x6005 | (op & 0x0f00));
+                /* Set source to test value */
+                interpret_instruction(&mut c8i, 0x60a0 | ((j & 0xf0) << 4));
+                /* Set VX to VY */
+                interpret_instruction(&mut c8i, op);
+                assert_eq!(c8i.v_regs[((op & 0x00F0) >> 4) as usize],
+                           c8i.v_regs[((op & 0x0F00) >> 8) as usize]);
             }
         }
     }
