@@ -119,6 +119,10 @@ impl Chip8Instance {
         match instruction & 0xF {
             /* LD Vx, Vy - Set Vx = Vy. */
             0 => self.v_regs[Chip8Instance::opc_regx(instruction) as usize] = self.v_regs[Chip8Instance::opc_regy(instruction) as usize],
+            /* OR Vx, Vy - Set Vx = Vx OR Vy. */
+            1 => self.v_regs[Chip8Instance::opc_regx(instruction) as usize] =
+                self.v_regs[Chip8Instance::opc_regx(instruction) as usize] |
+                self.v_regs[Chip8Instance::opc_regy(instruction) as usize],
             _ => self.unknown_instruction(instruction),
         }
 
@@ -392,6 +396,31 @@ mod chip8_tests {
                 interpret_instruction(&mut c8i, op);
                 assert_eq!(c8i.v_regs[((op & 0x00F0) >> 4) as usize],
                            c8i.v_regs[((op & 0x0F00) >> 8) as usize]);
+            }
+        }
+    }
+
+    #[test]
+    /* Sets VX to (VX or VY). (Bitwise OR operation) */
+    fn opc_8xy1() {
+        let mut c8i = Chip8Instance::default();
+
+        for i in (0x8001..0x9000).step_by(0x100) {
+            for j in (0..0xF1).step_by(0x10) {
+                let op = (i & 0xFF0F) | j;
+
+                /* Set destination with a known value */
+                interpret_instruction(&mut c8i, 0x6005 | (op & 0x0f00));
+                /* Set source to test value */
+                interpret_instruction(&mut c8i, 0x60a0 | ((j & 0xf0) << 4));
+                /* Set Vx = Vx | Vy */
+                interpret_instruction(&mut c8i, op);
+
+                if ((i & 0x0F00) >> 4) != (j & 0xF0) {
+                    assert_eq!(c8i.v_regs[((i & 0x0F00) >> 8) as usize], 0xa5);
+                } else {
+                    assert_eq!(c8i.v_regs[((i & 0x0F00) >> 8) as usize], 0xa0);
+                }
             }
         }
     }
