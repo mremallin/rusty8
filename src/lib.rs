@@ -56,8 +56,8 @@ impl Chip8Instance {
         ((instruction & 0x0F00) >> 8).into()
     }
 
-    fn opc_regy(instruction: u16) -> u16 {
-        (instruction & 0x00F0) >> 4
+    fn opc_regy(instruction: u16) -> usize {
+        ((instruction & 0x00F0) >> 4).into()
     }
 
     fn opc_nn(instruction: u16) -> u8 {
@@ -95,7 +95,7 @@ impl Chip8Instance {
         let vx = Chip8Instance::opc_regx(instruction);
         let vy = Chip8Instance::opc_regy(instruction);
 
-        if self.v_regs[vx] == self.v_regs[vy as usize] {
+        if self.v_regs[vx] == self.v_regs[vy] {
             self.pc += 2;
         }
     }
@@ -119,13 +119,13 @@ impl Chip8Instance {
             /* LD Vx, Vy - Set Vx = Vy. */
             0 => {
                 self.v_regs[Chip8Instance::opc_regx(instruction)] =
-                    self.v_regs[Chip8Instance::opc_regy(instruction) as usize]
+                    self.v_regs[Chip8Instance::opc_regy(instruction)]
             }
             /* OR Vx, Vy - Set Vx = Vx OR Vy. */
             1 => {
                 self.v_regs[Chip8Instance::opc_regx(instruction)] = self.v_regs
                     [Chip8Instance::opc_regx(instruction)]
-                    | self.v_regs[Chip8Instance::opc_regy(instruction) as usize]
+                    | self.v_regs[Chip8Instance::opc_regy(instruction)]
             }
             _ => self.unknown_instruction(instruction),
         }
