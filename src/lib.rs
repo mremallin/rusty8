@@ -35,8 +35,7 @@ impl Chip8Instance {
         self.stack_ptr += 2;
 
         let word_pop: u16 =
-            (self.ram[self.stack_ptr] as u16) << 8 |
-            (self.ram[self.stack_ptr + 1] as u16);
+            (self.ram[self.stack_ptr] as u16) << 8 | (self.ram[self.stack_ptr + 1] as u16);
 
         word_pop
     }
@@ -118,14 +117,18 @@ impl Chip8Instance {
     fn match_opcode_8(&mut self, instruction: u16) {
         match instruction & 0xF {
             /* LD Vx, Vy - Set Vx = Vy. */
-            0 => self.v_regs[Chip8Instance::opc_regx(instruction) as usize] = self.v_regs[Chip8Instance::opc_regy(instruction) as usize],
+            0 => {
+                self.v_regs[Chip8Instance::opc_regx(instruction) as usize] =
+                    self.v_regs[Chip8Instance::opc_regy(instruction) as usize]
+            }
             /* OR Vx, Vy - Set Vx = Vx OR Vy. */
-            1 => self.v_regs[Chip8Instance::opc_regx(instruction) as usize] =
-                self.v_regs[Chip8Instance::opc_regx(instruction) as usize] |
-                self.v_regs[Chip8Instance::opc_regy(instruction) as usize],
+            1 => {
+                self.v_regs[Chip8Instance::opc_regx(instruction) as usize] = self.v_regs
+                    [Chip8Instance::opc_regx(instruction) as usize]
+                    | self.v_regs[Chip8Instance::opc_regy(instruction) as usize]
+            }
             _ => self.unknown_instruction(instruction),
         }
-
     }
 
     fn is_little_endian() -> bool {
@@ -179,9 +182,7 @@ mod chip8_tests {
     }
 
     fn build_xnn_opc(opc: u8, x: u8, nn: u8) -> u16 {
-        (((opc & 0xF) as u16) << 12 |
-          ((x & 0xF) as u16) << 8 |
-          (nn as u16)).into()
+        (((opc & 0xF) as u16) << 12 | ((x & 0xF) as u16) << 8 | (nn as u16)).into()
     }
 
     #[test]
@@ -357,8 +358,10 @@ mod chip8_tests {
 
         for i in 0x6000..0x7000 {
             interpret_instruction(&mut c8i, i);
-            assert_eq!(c8i.v_regs[Chip8Instance::opc_regx(i) as usize],
-                       Chip8Instance::opc_nn(i));
+            assert_eq!(
+                c8i.v_regs[Chip8Instance::opc_regx(i) as usize],
+                Chip8Instance::opc_nn(i)
+            );
         }
     }
 
@@ -371,8 +374,10 @@ mod chip8_tests {
             c8i.v_regs[((i & 0x0F00) >> 8) as usize] = 5;
 
             interpret_instruction(&mut c8i, i);
-            assert_eq!(c8i.v_regs[Chip8Instance::opc_regx(i) as usize],
-                       u8::wrapping_add(Chip8Instance::opc_nn(i), 5));
+            assert_eq!(
+                c8i.v_regs[Chip8Instance::opc_regx(i) as usize],
+                u8::wrapping_add(Chip8Instance::opc_nn(i), 5)
+            );
             if (i & 0x0F00) != 0x0F00 {
                 assert_eq!(c8i.v_regs[0xF], 0);
             }
@@ -394,8 +399,10 @@ mod chip8_tests {
                 interpret_instruction(&mut c8i, 0x60a0 | ((j & 0xf0) << 4));
                 /* Set VX to VY */
                 interpret_instruction(&mut c8i, op);
-                assert_eq!(c8i.v_regs[((op & 0x00F0) >> 4) as usize],
-                           c8i.v_regs[((op & 0x0F00) >> 8) as usize]);
+                assert_eq!(
+                    c8i.v_regs[((op & 0x00F0) >> 4) as usize],
+                    c8i.v_regs[((op & 0x0F00) >> 8) as usize]
+                );
             }
         }
     }
