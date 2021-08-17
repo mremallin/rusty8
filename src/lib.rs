@@ -339,8 +339,8 @@ mod chip8_tests {
                      * be identical */
                     assert_eq!(c8i.pc, Chip8Instance::PROGRAM_LOAD_ADDR + 2);
                 } else {
-                    c8i.v_regs[((i & 0x0F00) >> 8) as usize] = 1;
-                    c8i.v_regs[(j >> 4) as usize] = 0x2;
+                    c8i.v_regs[Chip8Instance::opc_regx(i)] = 1;
+                    c8i.v_regs[Chip8Instance::opc_regy(j)] = 0x2;
                     interpret_instruction(&mut c8i, op);
                     /* No match, so PC should not be incremented. */
                     assert_eq!(c8i.pc, Chip8Instance::PROGRAM_LOAD_ADDR);
@@ -371,14 +371,14 @@ mod chip8_tests {
         let mut c8i = Chip8Instance::default();
 
         for i in 0x7000..0x8000 {
-            c8i.v_regs[((i & 0x0F00) >> 8) as usize] = 5;
+            c8i.v_regs[Chip8Instance::opc_regx(i)] = 5;
 
             interpret_instruction(&mut c8i, i);
             assert_eq!(
                 c8i.v_regs[Chip8Instance::opc_regx(i)],
                 u8::wrapping_add(Chip8Instance::opc_nn(i), 5)
             );
-            if (i & 0x0F00) != 0x0F00 {
+            if Chip8Instance::opc_regx(i) != 0xF {
                 assert_eq!(c8i.v_regs[0xF], 0);
             }
         }
@@ -394,14 +394,16 @@ mod chip8_tests {
                 let op = (i & 0xff00) | j;
 
                 /* Set destination with a known value */
-                interpret_instruction(&mut c8i, 0x6005 | (op & 0x0f00));
+                interpret_instruction(&mut c8i, 0x6005
+                    | (Chip8Instance::opc_regx(op)) as u16);
                 /* Set source to test value */
-                interpret_instruction(&mut c8i, 0x60a0 | ((j & 0xf0) << 4));
+                interpret_instruction(&mut c8i, 0x60a0
+                    | (Chip8Instance::opc_regy(j)) as u16);
                 /* Set VX to VY */
                 interpret_instruction(&mut c8i, op);
                 assert_eq!(
-                    c8i.v_regs[((op & 0x00F0) >> 4) as usize],
-                    c8i.v_regs[((op & 0x0F00) >> 8) as usize]
+                    c8i.v_regs[Chip8Instance::opc_regx(op)],
+                    c8i.v_regs[Chip8Instance::opc_regy(op)]
                 );
             }
         }
