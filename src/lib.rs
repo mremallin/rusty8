@@ -136,7 +136,14 @@ impl Chip8Instance {
                 self.v_regs[Chip8Instance::opc_regx(instruction)] = self.v_regs
                     [Chip8Instance::opc_regx(instruction)]
                     ^ self.v_regs[Chip8Instance::opc_regy(instruction)]
-                }
+            }
+            4 => {
+                let tmp = u16::wrapping_add(
+                    self.v_regs[Chip8Instance::opc_regx(instruction)] as u16,
+                    self.v_regs[Chip8Instance::opc_regy(instruction)] as u16);
+                self.v_regs[Chip8Instance::opc_regx(instruction)] = (tmp & 0x00ff) as u8;
+                self.v_regs[0xf] = ((tmp & 0x100) >> 8) as u8;
+            }
             _ => self.unknown_instruction(instruction),
         }
     }
@@ -489,6 +496,62 @@ mod chip8_tests {
                     assert_eq!(c8i.v_regs[((i & 0x0F00) >> 8) as usize], 0x0);
                 } else {
                     assert_eq!(c8i.v_regs[((i & 0x0F00) >> 8) as usize], 0x15);
+                }
+            }
+        }
+    }
+
+    #[test]
+    /* Adds VY to VX. VF is set to 1 when there's a carry,
+     * and to 0 when there isn't.   */
+    fn opc_8xy4_no_carry() {
+        let mut c8i = Chip8Instance::default();
+
+        for i in (0x8004..0x9000).step_by(0x100) {
+            for j in (0..0xF4).step_by(0x10) {
+                let op = (i & 0xFF0F) | j;
+
+                /* Set destination with a known value */
+                interpret_instruction(&mut c8i, 0x6005 | (op & 0x0f00));
+                /* Set source to test value */
+                interpret_instruction(&mut c8i, 0x6010 | ((j & 0xf0) << 4));
+                /* Set Vx = Vx & Vy */
+                interpret_instruction(&mut c8i, op);
+
+                if (i & 0x0F00) >> 8 == 0xF {
+                    assert_eq!(c8i.v_regs[0xF], 0);
+                } else if ((i & 0x0F00) >> 4) == (j & 0xF0) {
+                    assert_eq!(c8i.v_regs[((i & 0x0F00) >> 8) as usize], 0x20);
+                } else {
+                    assert_eq!(c8i.v_regs[((i & 0x0F00) >> 8) as usize], 0x15);
+                }
+            }
+        }
+    }
+
+    #[test]
+    /* Adds VY to VX. VF is set to 1 when there's a carry,
+     * and to 0 when there isn't.   */
+    fn opc_8xy4_carry() {
+        let mut c8i = Chip8Instance::default();
+
+        for i in (0x8004..0x9000).step_by(0x100) {
+            for j in (0..0xF4).step_by(0x10) {
+                let op = (i & 0xFF0F) | j;
+
+                /* Set destination with a known value */
+                interpret_instruction(&mut c8i, 0x60ff | (op & 0x0f00));
+                /* Set source to test value */
+                interpret_instruction(&mut c8i, 0x60af | ((j & 0xf0) << 4));
+                /* Set Vx = Vx & Vy */
+                interpret_instruction(&mut c8i, op);
+
+                if (i & 0x0F00) >> 8 == 0xF {
+                    assert_eq!(c8i.v_regs[0xF], 1);
+                } else if ((i & 0x0F00) >> 4) == (j & 0xF0) {
+                    assert_eq!(c8i.v_regs[((i & 0x0F00) >> 8) as usize], 0x5e);
+                } else {
+                    assert_eq!(c8i.v_regs[((i & 0x0F00) >> 8) as usize], 0xae);
                 }
             }
         }
