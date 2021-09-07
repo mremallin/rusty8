@@ -182,6 +182,15 @@ impl Chip8Instance {
                     self.v_regs[Chip8Instance::opc_regx(instruction)],
                 );
             }
+            0xE => {
+                if (self.v_regs[Chip8Instance::opc_regx(instruction)] & 0x80) != 0 {
+                    self.v_regs[0xf] = 1;
+                } else {
+                    self.v_regs[0xf] = 0;
+                }
+                self.v_regs[Chip8Instance::opc_regx(instruction)] =
+                    self.v_regs[Chip8Instance::opc_regx(instruction)] << 1;
+            }
             _ => self.unknown_instruction(instruction),
         }
     }
@@ -708,4 +717,43 @@ mod chip8_tests {
             }
         }
     }
+
+    #[test]
+    /* Stores the most significant bit of VX in VF and then
+     * shifts VX to the left by 1. */
+    fn opc_8xye_no_high_bit() {
+        let mut c8i = Chip8Instance::default();
+
+        for i in (0x800e..0x9000).step_by(0x100) {
+            interpret_instruction(&mut c8i, 0x6010 | (i & 0x0f00));
+            interpret_instruction(&mut c8i, i);
+
+            if (i & 0x0f00) >> 8 == 0xf {
+                assert_eq!(c8i.v_regs[0xf], 0);
+            } else {
+                assert_eq!(c8i.v_regs[0xf], 0);
+                assert_eq!(c8i.v_regs[((i & 0x0f00) >> 8) as usize], 0x20);
+            }
+        }
+    }
+
+    #[test]
+    /* Stores the most significant bit of VX in VF and then
+     * shifts VX to the left by 1. */
+    fn opc_8xye_high_bit() {
+        let mut c8i = Chip8Instance::default();
+
+        for i in (0x800e..0x9000).step_by(0x100) {
+            interpret_instruction(&mut c8i, 0x6082 | (i & 0x0f00));
+            interpret_instruction(&mut c8i, i);
+
+            if (i & 0x0f00) >> 8 == 0xf {
+                assert_eq!(c8i.v_regs[0xf], 2);
+            } else {
+                assert_eq!(c8i.v_regs[0xf], 1);
+                assert_eq!(c8i.v_regs[((i & 0x0f00) >> 8) as usize], 0x4);
+            }
+        }
+    }
+
 }
