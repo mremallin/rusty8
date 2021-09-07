@@ -127,34 +127,46 @@ impl Chip8Instance {
                     [Chip8Instance::opc_regx(instruction)]
                     | self.v_regs[Chip8Instance::opc_regy(instruction)]
             }
+            /* AND Vx, Vy - Set Vx = Vx AND Vy. */
             2 => {
                 self.v_regs[Chip8Instance::opc_regx(instruction)] = self.v_regs
                     [Chip8Instance::opc_regx(instruction)]
                     & self.v_regs[Chip8Instance::opc_regy(instruction)]
             }
+            /* XOR Vx, Vy - Set Vx = Vx XOR Vy. */
             3 => {
                 self.v_regs[Chip8Instance::opc_regx(instruction)] = self.v_regs
                     [Chip8Instance::opc_regx(instruction)]
                     ^ self.v_regs[Chip8Instance::opc_regy(instruction)]
             }
+            /* ADD Vx, Vy - Set Vx = Vx + Vy, set VF = carry. */
             4 => {
                 let tmp = u16::wrapping_add(
                     self.v_regs[Chip8Instance::opc_regx(instruction)] as u16,
-                    self.v_regs[Chip8Instance::opc_regy(instruction)] as u16);
+                    self.v_regs[Chip8Instance::opc_regy(instruction)] as u16,
+                );
                 self.v_regs[Chip8Instance::opc_regx(instruction)] = (tmp & 0x00ff) as u8;
                 self.v_regs[0xf] = ((tmp & 0x100) >> 8) as u8;
             }
+            /* SUB Vx, Vy - Set Vx = Vx - Vy, set VF = NOT borrow. */
             5 => {
                 if self.v_regs[Chip8Instance::opc_regx(instruction)]
-                     > self.v_regs[Chip8Instance::opc_regy(instruction)] {
+                    > self.v_regs[Chip8Instance::opc_regy(instruction)]
+                {
                     self.v_regs[0xf] = 1;
                 } else {
                     self.v_regs[0xf] = 0;
                 }
+                self.v_regs[Chip8Instance::opc_regx(instruction)] = u8::wrapping_sub(
+                    self.v_regs[Chip8Instance::opc_regx(instruction)],
+                    self.v_regs[Chip8Instance::opc_regy(instruction)],
+                );
+            }
+            /* SHR Vx - Set Vx = Vx SHR 1. */
+            6 => {
+                self.v_regs[0xf] = self.v_regs[Chip8Instance::opc_regx(instruction)] & 0x1;
                 self.v_regs[Chip8Instance::opc_regx(instruction)] =
-                    u8::wrapping_sub(
-                        self.v_regs[Chip8Instance::opc_regx(instruction)],
-                        self.v_regs[Chip8Instance::opc_regy(instruction)]);
+                    self.v_regs[Chip8Instance::opc_regx(instruction)] >> 1;
             }
             _ => self.unknown_instruction(instruction),
         }
@@ -423,11 +435,9 @@ mod chip8_tests {
                 let op = (i & 0xff00) | j;
 
                 /* Set destination with a known value */
-                interpret_instruction(&mut c8i, 0x6005
-                    | (Chip8Instance::opc_regx(op)) as u16);
+                interpret_instruction(&mut c8i, 0x6005 | (Chip8Instance::opc_regx(op)) as u16);
                 /* Set source to test value */
-                interpret_instruction(&mut c8i, 0x60a0
-                    | (Chip8Instance::opc_regy(j)) as u16);
+                interpret_instruction(&mut c8i, 0x60a0 | (Chip8Instance::opc_regy(j)) as u16);
                 /* Set VX to VY */
                 interpret_instruction(&mut c8i, op);
                 assert_eq!(
@@ -604,6 +614,44 @@ mod chip8_tests {
                     assert_eq!(c8i.v_regs[((op & 0x0F00) >> 8) as usize], 0x0b);
                     assert_eq!(c8i.v_regs[0xf], 1);
                 }
+            }
+        }
+    }
+
+    #[test]
+    /* Stores the least significant bit of VX in VF and then
+     * shifts VX to the right by 1. */
+    fn opc_8xy6_no_low_bit() {
+        let mut c8i = Chip8Instance::default();
+
+        for i in (0x8006..0x9000).step_by(0x100) {
+            interpret_instruction(&mut c8i, 0x6010 | (i & 0x0f00));
+            interpret_instruction(&mut c8i, i);
+
+            if (i & 0x0f00) >> 8 == 0xf {
+                assert_eq!(c8i.v_regs[0xf], 0);
+            } else {
+                assert_eq!(c8i.v_regs[0xf], 0);
+                assert_eq!(c8i.v_regs[((i & 0x0f00) >> 8) as usize], 0x08);
+            }
+        }
+    }
+
+    #[test]
+    /* Stores the least significant bit of VX in VF and then
+     * shifts VX to the right by 1. */
+    fn opc_8xy6_low_bit() {
+        let mut c8i = Chip8Instance::default();
+
+        for i in (0x8006..0x9000).step_by(0x100) {
+            interpret_instruction(&mut c8i, 0x6011 | (i & 0x0f00));
+            interpret_instruction(&mut c8i, i);
+
+            if (i & 0x0f00) >> 8 == 0xf {
+                assert_eq!(c8i.v_regs[0xf], 0);
+            } else {
+                assert_eq!(c8i.v_regs[0xf], 1);
+                assert_eq!(c8i.v_regs[((i & 0x0f00) >> 8) as usize], 0x08);
             }
         }
     }
