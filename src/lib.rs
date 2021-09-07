@@ -212,6 +212,10 @@ impl Chip8Instance {
         self.i_reg = Chip8Instance::opc_nnn(instruction);
     }
 
+    fn match_opcode_b(&mut self, instruction: u16) {
+        self.i_reg = Chip8Instance::opc_nnn(instruction) + self.v_regs[0] as u16;
+    }
+
     fn is_little_endian() -> bool {
         (47 as u16).to_be() != 47
     }
@@ -233,6 +237,7 @@ impl Chip8Instance {
             0x8 => self.match_opcode_8(instruction),
             0x9 => self.match_opcode_9(instruction),
             0xa => self.match_opcode_a(instruction),
+            0xb => self.match_opcode_b(instruction),
             _ => self.unknown_instruction(instruction),
         }
     }
@@ -804,6 +809,7 @@ mod chip8_tests {
     }
 
     #[test]
+    /* LD I, NNN */
     fn opc_annn() {
         let mut c8i = Chip8Instance::default();
 
@@ -811,5 +817,29 @@ mod chip8_tests {
             interpret_instruction(&mut c8i, i);
             assert_eq!(c8i.i_reg, i & 0xfff);
         }
+    }
+
+    #[test]
+    /* JP V0, NNN
+     * Jump to NNN + V0 */
+    fn opc_bnnn_v0_nop() {
+        let mut c8i = Chip8Instance::default();
+
+        for i in 0xb000..0xc000 {
+            interpret_instruction(&mut c8i, 0x6000);
+            interpret_instruction(&mut c8i, i);
+            assert_eq!(c8i.i_reg, i & 0xfff);
+        }
+    }
+
+    #[test]
+    /* JP V0, NNN
+     * Jump to NNN + V0 */
+    fn opc_bnnn_v0_overflow() {
+        let mut c8i = Chip8Instance::default();
+
+        interpret_instruction(&mut c8i, 0x60ff);
+        interpret_instruction(&mut c8i, 0xbfff);
+        assert_eq!(c8i.i_reg, 0x10fe);
     }
 }
