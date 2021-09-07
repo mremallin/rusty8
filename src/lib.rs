@@ -195,6 +195,19 @@ impl Chip8Instance {
         }
     }
 
+    fn match_opcode_9(&mut self, instruction: u16) {
+        match instruction & 0xF {
+            0 => {
+                if self.v_regs[Chip8Instance::opc_regx(instruction)]
+                    != self.v_regs[Chip8Instance::opc_regy(instruction)]
+                {
+                    self.pc = u16::wrapping_add(self.pc, 2);
+                }
+            }
+            _ => self.unknown_instruction(instruction),
+        }
+    }
+
     fn is_little_endian() -> bool {
         (47 as u16).to_be() != 47
     }
@@ -214,6 +227,7 @@ impl Chip8Instance {
             0x6 => self.match_opcode_6(instruction),
             0x7 => self.match_opcode_7(instruction),
             0x8 => self.match_opcode_8(instruction),
+            0x9 => self.match_opcode_9(instruction),
             _ => self.unknown_instruction(instruction),
         }
     }
@@ -756,4 +770,31 @@ mod chip8_tests {
         }
     }
 
+    #[test]
+    /* Skip next instruction of Vx != Vy. */
+    fn opc_9xy0() {
+        let mut c8i = Chip8Instance::default();
+
+        for i in (0x9000..0xa000).step_by(0x100) {
+            for j in (0..0x100).step_by(0x10) {
+                let op = (i & 0xFF0F) | j;
+
+                /* Set destination with a known value */
+                interpret_instruction(&mut c8i, 0x6010 | (op & 0x0f00));
+                /* Set source to test value */
+                interpret_instruction(&mut c8i, 0x6005 | ((j & 0xf0) << 4));
+                /* Set Vx = Vx & Vy */
+                interpret_instruction(&mut c8i, op);
+
+                if ((op & 0x0F00) >> 4) == (j & 0xF0) {
+                    assert_eq!(c8i.pc, Chip8Instance::PROGRAM_LOAD_ADDR);
+                } else {
+                    assert_eq!(c8i.pc, Chip8Instance::PROGRAM_LOAD_ADDR + 2);
+                }
+
+                /* Reset program counter back to the start */
+                interpret_instruction(&mut c8i, 0x1000 | Chip8Instance::PROGRAM_LOAD_ADDR);
+            }
+        }
+    }
 }
