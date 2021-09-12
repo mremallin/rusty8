@@ -1,4 +1,25 @@
 use rand::prelude::*;
+use variant_count::VariantCount;
+
+#[derive(VariantCount)]
+enum Chip8Key {
+    Key0,
+    Key1,
+    Key2,
+    Key3,
+    Key4,
+    Key5,
+    Key6,
+    Key7,
+    Key8,
+    Key9,
+    KeyA,
+    KeyB,
+    KeyC,
+    KeyD,
+    KeyE,
+    KeyF,
+}
 
 pub struct Chip8Instance {
     rng: Box<dyn RngCore>,
@@ -8,6 +29,7 @@ pub struct Chip8Instance {
     pc: u16,
     stack_ptr: usize,
     vram: [[u8; Chip8Instance::DISPLAY_WIDTH_PIXELS]; Chip8Instance::DISPLAY_HEIGHT_PIXELS],
+    keys_pressed: [bool; Chip8Key::VARIANT_COUNT],
 }
 
 impl Chip8Instance {
@@ -278,6 +300,18 @@ impl Chip8Instance {
         }
     }
 
+    fn match_opcode_e(&mut self, instruction: u16) {
+        let op = Chip8Instance::opc_nn(instruction);
+
+        match op {
+            0x9e =>
+                if self.keys_pressed[self.v_regs[Chip8Instance::opc_regx(instruction)] as usize] {
+                    self.pc += 2
+                },
+            _ => self.unknown_instruction(instruction),
+        }
+    }
+
     fn is_little_endian() -> bool {
         (47 as u16).to_be() != 47
     }
@@ -303,6 +337,7 @@ impl Chip8Instance {
             0xb => self.match_opcode_b(instruction),
             0xc => self.match_opcode_c(instruction),
             0xd => self.match_opcode_d(instruction),
+            0xe => self.match_opcode_e(instruction),
             _ => self.unknown_instruction(instruction),
         }
     }
@@ -319,6 +354,7 @@ impl Default for Chip8Instance {
             pc: Chip8Instance::PROGRAM_LOAD_ADDR,
             stack_ptr: Chip8Instance::STACK_BASE_ADDR,
             vram: [[0; Chip8Instance::DISPLAY_WIDTH_PIXELS]; Chip8Instance::DISPLAY_HEIGHT_PIXELS],
+            keys_pressed: [false; Chip8Key::VARIANT_COUNT],
         }
     }
 }
@@ -326,6 +362,7 @@ impl Default for Chip8Instance {
 #[cfg(test)]
 mod chip8_tests {
     use crate::Chip8Instance;
+    use crate::Chip8Key;
     use rand::rngs::mock::StepRng;
 
     /* CHIP8 operates with Big-Endian data so for test convenience, handle
@@ -1015,5 +1052,33 @@ mod chip8_tests {
 
         /* Nothing in VRAM at the start of the test so no pixels are cleared */
         assert_eq!(c8i.v_regs[0xf], 0);
+    }
+
+    #[test]
+    fn opc_ex9e_pressed() {
+        let mut c8i = Chip8Instance::default();
+
+        for i in 0..Chip8Instance::NUM_V_REGISTERS {
+            c8i.keys_pressed[Chip8Key::Key0 as usize] = true;
+            interpret_instruction(&mut c8i, build_xnn_opc(0x6, i as u8, 0));
+            interpret_instruction(&mut c8i, build_xnn_opc(0xe, i as u8, 0x9e));
+
+            assert_eq!(c8i.pc, Chip8Instance::PROGRAM_LOAD_ADDR + 2);
+            interpret_instruction(&mut c8i, build_nnn_opc(1, Chip8Instance::PROGRAM_LOAD_ADDR));
+        }
+    }
+
+    #[test]
+    fn opc_ex9e_not_pressed() {
+        let mut c8i = Chip8Instance::default();
+
+        for i in 0..Chip8Instance::NUM_V_REGISTERS {
+            c8i.keys_pressed[Chip8Key::Key0 as usize] = false;
+            interpret_instruction(&mut c8i, build_xnn_opc(0x6, i as u8, 0));
+            interpret_instruction(&mut c8i, build_xnn_opc(0xe, i as u8, 0x9e));
+
+            assert_eq!(c8i.pc, Chip8Instance::PROGRAM_LOAD_ADDR);
+            interpret_instruction(&mut c8i, build_nnn_opc(1, Chip8Instance::PROGRAM_LOAD_ADDR));
+        }
     }
 }
