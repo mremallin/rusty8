@@ -305,14 +305,20 @@ impl Chip8Instance {
         let op = Chip8Instance::opc_nn(instruction);
 
         match op {
-            0x9e => /* SKP Vx */
+            0x9e =>
+            /* SKP Vx */
+            {
                 if self.keys_pressed[self.v_regs[Chip8Instance::opc_regx(instruction)] as usize] {
                     self.pc += 2
-                },
-            0xa1 => /* SKNP Vx */
+                }
+            }
+            0xa1 =>
+            /* SKNP Vx */
+            {
                 if !self.keys_pressed[self.v_regs[Chip8Instance::opc_regx(instruction)] as usize] {
                     self.pc += 2
-                },
+                }
+            }
             _ => self.unknown_instruction(instruction),
         }
     }
@@ -321,8 +327,11 @@ impl Chip8Instance {
         let op = Chip8Instance::opc_nn(instruction);
 
         match op {
-            0x7 => /* LD Vx, DT */
-                self.v_regs[Chip8Instance::opc_regx(instruction)] = self.delay_timer as u8,
+            0x7 =>
+            /* LD Vx, DT */
+            {
+                self.v_regs[Chip8Instance::opc_regx(instruction)] = self.delay_timer as u8
+            }
             _ => self.unknown_instruction(instruction),
         }
     }
@@ -404,8 +413,10 @@ mod chip8_tests {
         (((opc & 0xF) as u16) << 12 | ((x & 0xF) as u16) << 8 | (nn as u16)).into()
     }
 
-    fn build_xyn_opc(opc: u8, x:u8, y: u8, n: u8) -> u16 {
-        ((((opc & 0xF) as u16) << 12 | ((x & 0xF) as u16) << 8 | ((y & 0xF) as u16) << 4) | ((n & 0xf) as u16)).into()
+    fn build_xyn_opc(opc: u8, x: u8, y: u8, n: u8) -> u16 {
+        ((((opc & 0xF) as u16) << 12 | ((x & 0xF) as u16) << 8 | ((y & 0xF) as u16) << 4)
+            | ((n & 0xf) as u16))
+            .into()
     }
 
     #[test]
@@ -413,7 +424,9 @@ mod chip8_tests {
     fn opc_00e0() {
         let mut c8i = Chip8Instance::default();
 
-        c8i.vram.iter_mut().for_each(|m| *m = [0xff; Chip8Instance::DISPLAY_WIDTH_PIXELS]);
+        c8i.vram
+            .iter_mut()
+            .for_each(|m| *m = [0xff; Chip8Instance::DISPLAY_WIDTH_PIXELS]);
 
         interpret_instruction(&mut c8i, 0x00e0);
 
@@ -624,10 +637,7 @@ mod chip8_tests {
                 interpret_instruction(&mut c8i, build_xnn_opc(6, j as u8, 0xa0));
                 /* Set VX to VY */
                 interpret_instruction(&mut c8i, op);
-                assert_eq!(
-                    c8i.v_regs[i],
-                    c8i.v_regs[j]
-                );
+                assert_eq!(c8i.v_regs[i], c8i.v_regs[j]);
             }
         }
     }

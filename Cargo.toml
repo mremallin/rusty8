@@ -13,3 +13,4 @@ edition = "2018"
 
 [dependencies]
 rand = "0.8.4"
+variant_count = "1.1.0"
