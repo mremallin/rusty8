@@ -287,6 +287,10 @@ mod chip8_tests {
         (((opc & 0xF) as u16) << 12 | ((x & 0xF) as u16) << 8 | (nn as u16)).into()
     }
 
+    fn build_xy0_opc(opc: u8, x:u8, y: u8) -> u16 {
+        ((((opc & 0xF) as u16) << 12 | ((x & 0xF) as u16) << 8 | ((y & 0xF) as u16) << 4) & 0xFFF0).into()
+    }
+
     #[test]
     /* Clear the display */
     fn opc_00e0() {
@@ -409,9 +413,9 @@ mod chip8_tests {
         let mut c8i = Chip8Instance::default();
 
         /* Test each register behaves the same */
-        for i in (0x5000..0x6000).step_by(0x100) {
-            for j in (0..0x00F0).step_by(0x10) {
-                let op = (i & 0xFF00) | j;
+        for i in 0..Chip8Instance::NUM_V_REGISTERS {
+            for j in 0..Chip8Instance::NUM_V_REGISTERS {
+                let op = build_xy0_opc(5, i as u8, j as u8);
                 interpret_instruction(&mut c8i, op);
 
                 /* Match, so PC should be incremented again. */
@@ -430,19 +434,19 @@ mod chip8_tests {
         let mut c8i = Chip8Instance::default();
 
         /* Test each register behaves the same */
-        for i in (0x5000..0x5FFF).step_by(0x100) {
-            for j in (0..0x00F0).step_by(0x10) {
-                let op = (i & 0xFF00) | j;
+        for i in 0..Chip8Instance::NUM_V_REGISTERS {
+            for j in 0..Chip8Instance::NUM_V_REGISTERS {
+                let op = build_xy0_opc(5, i as u8, j as u8);
 
                 /* Ensure that VI != VJ */
-                if (i & 0x0F00) >> 4 == j {
+                if i == j {
                     interpret_instruction(&mut c8i, op);
                     /* X == Y so the contents of the register is guaranteed to
                      * be identical */
                     assert_eq!(c8i.pc, Chip8Instance::PROGRAM_LOAD_ADDR + 2);
                 } else {
-                    c8i.v_regs[Chip8Instance::opc_regx(i)] = 1;
-                    c8i.v_regs[Chip8Instance::opc_regy(j)] = 0x2;
+                    c8i.v_regs[i] = 0x1;
+                    c8i.v_regs[j] = 0x2;
                     interpret_instruction(&mut c8i, op);
                     /* No match, so PC should not be incremented. */
                     assert_eq!(c8i.pc, Chip8Instance::PROGRAM_LOAD_ADDR);
