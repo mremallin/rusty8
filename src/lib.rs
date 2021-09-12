@@ -850,7 +850,7 @@ mod chip8_tests {
         let mut c8i = Chip8Instance::default();
 
         for i in 0xb000..0xc000 {
-            interpret_instruction(&mut c8i, 0x6000);
+            interpret_instruction(&mut c8i, build_xnn_opc(6, 0, 0));
             interpret_instruction(&mut c8i, i);
             assert_eq!(c8i.i_reg, i & 0xfff);
         }
@@ -862,8 +862,8 @@ mod chip8_tests {
     fn opc_bnnn_v0_overflow() {
         let mut c8i = Chip8Instance::default();
 
-        interpret_instruction(&mut c8i, 0x60ff);
-        interpret_instruction(&mut c8i, 0xbfff);
+        interpret_instruction(&mut c8i, build_xnn_opc(6, 0, 0xff));
+        interpret_instruction(&mut c8i, build_xnn_opc(0xb, 0xf, 0xff));
         assert_eq!(c8i.i_reg, 0x10fe);
     }
 
@@ -875,10 +875,10 @@ mod chip8_tests {
         let mut c8i = Chip8Instance::default();
         c8i.rng = Box::new(StepRng::new(4, 0));
 
-        interpret_instruction(&mut c8i, 0xC0FF);
+        interpret_instruction(&mut c8i, build_xnn_opc(0xc, 0x0, 0xff));
         assert_eq!(c8i.v_regs[0], 4);
 
-        interpret_instruction(&mut c8i, 0xC000);
+        interpret_instruction(&mut c8i, build_xnn_opc(0xc, 0, 0));
         assert_eq!(c8i.v_regs[0], 0);
     }
 }
