@@ -271,13 +271,16 @@ impl Default for Chip8Instance {
 mod chip8_tests {
     use crate::Chip8Instance;
     use rand::rngs::mock::StepRng;
-    use rand::Rng;
 
     /* CHIP8 operates with Big-Endian data so for test convenience, handle
      * the byteswap of the instruction for test readability */
     fn interpret_instruction(c8i: &mut Chip8Instance, instruction: u16) {
-        let bswap_instruction = instruction.to_be();
-        c8i.interpret_instruction(bswap_instruction);
+        if Chip8Instance::is_little_endian() {
+            let bswap_instruction = instruction.to_be();
+            c8i.interpret_instruction(bswap_instruction);
+        } else {
+            c8i.interpret_instruction(instruction);
+        }
     }
 
     fn build_xnn_opc(opc: u8, x: u8, nn: u8) -> u16 {
