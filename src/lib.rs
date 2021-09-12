@@ -304,8 +304,12 @@ impl Chip8Instance {
         let op = Chip8Instance::opc_nn(instruction);
 
         match op {
-            0x9e =>
+            0x9e => /* SKP Vx */
                 if self.keys_pressed[self.v_regs[Chip8Instance::opc_regx(instruction)] as usize] {
+                    self.pc += 2
+                },
+            0xa1 => /* SKNP Vx */
+                if !self.keys_pressed[self.v_regs[Chip8Instance::opc_regx(instruction)] as usize] {
                     self.pc += 2
                 },
             _ => self.unknown_instruction(instruction),
@@ -1078,6 +1082,34 @@ mod chip8_tests {
             interpret_instruction(&mut c8i, build_xnn_opc(0xe, i as u8, 0x9e));
 
             assert_eq!(c8i.pc, Chip8Instance::PROGRAM_LOAD_ADDR);
+            interpret_instruction(&mut c8i, build_nnn_opc(1, Chip8Instance::PROGRAM_LOAD_ADDR));
+        }
+    }
+
+    #[test]
+    fn opc_exa1_pressed() {
+        let mut c8i = Chip8Instance::default();
+
+        for i in 0..Chip8Instance::NUM_V_REGISTERS {
+            c8i.keys_pressed[Chip8Key::Key0 as usize] = true;
+            interpret_instruction(&mut c8i, build_xnn_opc(0x6, i as u8, 0));
+            interpret_instruction(&mut c8i, build_xnn_opc(0xe, i as u8, 0xa1));
+
+            assert_eq!(c8i.pc, Chip8Instance::PROGRAM_LOAD_ADDR);
+            interpret_instruction(&mut c8i, build_nnn_opc(1, Chip8Instance::PROGRAM_LOAD_ADDR));
+        }
+    }
+
+    #[test]
+    fn opc_exa1_not_pressed() {
+        let mut c8i = Chip8Instance::default();
+
+        for i in 0..Chip8Instance::NUM_V_REGISTERS {
+            c8i.keys_pressed[Chip8Key::Key0 as usize] = false;
+            interpret_instruction(&mut c8i, build_xnn_opc(0x6, i as u8, 0));
+            interpret_instruction(&mut c8i, build_xnn_opc(0xe, i as u8, 0xa1));
+
+            assert_eq!(c8i.pc, Chip8Instance::PROGRAM_LOAD_ADDR + 2);
             interpret_instruction(&mut c8i, build_nnn_opc(1, Chip8Instance::PROGRAM_LOAD_ADDR));
         }
     }
