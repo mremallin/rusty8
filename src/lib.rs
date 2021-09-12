@@ -281,6 +281,10 @@ mod chip8_tests {
         }
     }
 
+    fn build_nnn_opc(opc: u8, nnn: u16) -> u16 {
+        (((opc & 0xF) as u16) << 12 | ((nnn & 0xFFF) as u16)) as u16
+    }
+
     fn build_xnn_opc(opc: u8, x: u8, nn: u8) -> u16 {
         (((opc & 0xF) as u16) << 12 | ((x & 0xF) as u16) << 8 | (nn as u16)).into()
     }
@@ -729,33 +733,33 @@ mod chip8_tests {
     fn opc_8xy7() {
         let mut c8i = Chip8Instance::default();
 
-        for i in (0x8007..0x9000).step_by(0x100) {
-            for j in (0..0xF5).step_by(0x10) {
-                let op = (i & 0xFF0F) | j;
+        for i in 0..Chip8Instance::NUM_V_REGISTERS {
+            for j in 0..Chip8Instance::NUM_V_REGISTERS {
+                let op = build_xyn_opc(8, i as u8, j as u8, 7);
 
                 /* Set destination with a known value */
-                interpret_instruction(&mut c8i, 0x6010 | (op & 0x0f00));
+                interpret_instruction(&mut c8i, build_xnn_opc(6, i as u8, 0x10));
                 /* Set source to test value */
-                interpret_instruction(&mut c8i, 0x6005 | ((j & 0xf0) << 4));
+                interpret_instruction(&mut c8i, build_xnn_opc(6, j as u8, 5));
                 /* Set Vx = Vx & Vy */
                 interpret_instruction(&mut c8i, op);
 
                 /* Different from the Add operation, the borrow flag is set
                  * first and then subtraction is performed. This means that
                  * use of the flag register will impact the result. */
-                if (op & 0x0F00) >> 8 == 0xF && (j & 0xF0) >> 4 == 0xF {
+                if i == 0xF && j == 0xF {
                     assert_eq!(c8i.v_regs[0xF], 0);
-                } else if (op & 0xf0) == 0xf0 {
+                } else if j == 0xf {
                     /* Vy - 0x1 = 0xF */
-                    assert_eq!(c8i.v_regs[((op & 0x0f00) >> 8) as usize], 0xf0);
-                } else if (op & 0x0f00) == 0x0f00 {
+                    assert_eq!(c8i.v_regs[i], 0xf0);
+                } else if i == 0xf {
                     /* VF (0x1) - Vx = 0xFC */
-                    assert_eq!(c8i.v_regs[0xf], 0x5);
-                } else if ((op & 0x0F00) >> 4) == (j & 0xF0) {
-                    assert_eq!(c8i.v_regs[((op & 0x0F00) >> 8) as usize], 0x00);
+                    assert_eq!(c8i.v_regs[i], 0x5);
+                } else if i == j {
+                    assert_eq!(c8i.v_regs[i], 0x00);
                     assert_eq!(c8i.v_regs[0xf], 0);
                 } else {
-                    assert_eq!(c8i.v_regs[((op & 0x0F00) >> 8) as usize], 0x0f5);
+                    assert_eq!(c8i.v_regs[i], 0x0f5);
                     assert_eq!(c8i.v_regs[0xf], 0);
                 }
             }
@@ -765,18 +769,18 @@ mod chip8_tests {
     #[test]
     /* Stores the most significant bit of VX in VF and then
      * shifts VX to the left by 1. */
-    fn opc_8xye_no_high_bit() {
+    fn opc_8x0e_no_high_bit() {
         let mut c8i = Chip8Instance::default();
 
-        for i in (0x800e..0x9000).step_by(0x100) {
-            interpret_instruction(&mut c8i, 0x6010 | (i & 0x0f00));
-            interpret_instruction(&mut c8i, i);
+        for i in 0..Chip8Instance::NUM_V_REGISTERS {
+            interpret_instruction(&mut c8i, build_xnn_opc(6, i as u8, 0x10));
+            interpret_instruction(&mut c8i, build_xnn_opc(8, i as u8, 0x0e));
 
-            if (i & 0x0f00) >> 8 == 0xf {
-                assert_eq!(c8i.v_regs[0xf], 0);
+            if i == 0xf {
+                assert_eq!(c8i.v_regs[i], 0);
             } else {
                 assert_eq!(c8i.v_regs[0xf], 0);
-                assert_eq!(c8i.v_regs[((i & 0x0f00) >> 8) as usize], 0x20);
+                assert_eq!(c8i.v_regs[i], 0x20);
             }
         }
     }
@@ -784,18 +788,18 @@ mod chip8_tests {
     #[test]
     /* Stores the most significant bit of VX in VF and then
      * shifts VX to the left by 1. */
-    fn opc_8xye_high_bit() {
+    fn opc_8x0e_high_bit() {
         let mut c8i = Chip8Instance::default();
 
-        for i in (0x800e..0x9000).step_by(0x100) {
-            interpret_instruction(&mut c8i, 0x6082 | (i & 0x0f00));
-            interpret_instruction(&mut c8i, i);
+        for i in 0..Chip8Instance::NUM_V_REGISTERS {
+            interpret_instruction(&mut c8i, build_xnn_opc(6, i as u8, 0x82));
+            interpret_instruction(&mut c8i, build_xnn_opc(8, i as u8, 0x0e));
 
-            if (i & 0x0f00) >> 8 == 0xf {
-                assert_eq!(c8i.v_regs[0xf], 2);
+            if i == 0xf {
+                assert_eq!(c8i.v_regs[i], 2);
             } else {
                 assert_eq!(c8i.v_regs[0xf], 1);
-                assert_eq!(c8i.v_regs[((i & 0x0f00) >> 8) as usize], 0x4);
+                assert_eq!(c8i.v_regs[i], 0x4);
             }
         }
     }
@@ -805,25 +809,25 @@ mod chip8_tests {
     fn opc_9xy0() {
         let mut c8i = Chip8Instance::default();
 
-        for i in (0x9000..0xa000).step_by(0x100) {
-            for j in (0..0x100).step_by(0x10) {
-                let op = (i & 0xFF0F) | j;
+        for i in 0..Chip8Instance::NUM_V_REGISTERS {
+            for j in 0..Chip8Instance::NUM_V_REGISTERS {
+                let op = build_xyn_opc(9, i as u8, j as u8, 0);
 
                 /* Set destination with a known value */
-                interpret_instruction(&mut c8i, 0x6010 | (op & 0x0f00));
+                interpret_instruction(&mut c8i, build_xnn_opc(6, i as u8, 0x10));
                 /* Set source to test value */
-                interpret_instruction(&mut c8i, 0x6005 | ((j & 0xf0) << 4));
+                interpret_instruction(&mut c8i, build_xnn_opc(6, j as u8, 5));
                 /* Set Vx = Vx & Vy */
                 interpret_instruction(&mut c8i, op);
 
-                if ((op & 0x0F00) >> 4) == (j & 0xF0) {
+                if i == j {
                     assert_eq!(c8i.pc, Chip8Instance::PROGRAM_LOAD_ADDR);
                 } else {
                     assert_eq!(c8i.pc, Chip8Instance::PROGRAM_LOAD_ADDR + 2);
                 }
 
                 /* Reset program counter back to the start */
-                interpret_instruction(&mut c8i, 0x1000 | Chip8Instance::PROGRAM_LOAD_ADDR);
+                interpret_instruction(&mut c8i, build_nnn_opc(1, Chip8Instance::PROGRAM_LOAD_ADDR));
             }
         }
     }
