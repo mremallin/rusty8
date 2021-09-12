@@ -287,8 +287,8 @@ mod chip8_tests {
         (((opc & 0xF) as u16) << 12 | ((x & 0xF) as u16) << 8 | (nn as u16)).into()
     }
 
-    fn build_xy0_opc(opc: u8, x:u8, y: u8) -> u16 {
-        ((((opc & 0xF) as u16) << 12 | ((x & 0xF) as u16) << 8 | ((y & 0xF) as u16) << 4) & 0xFFF0).into()
+    fn build_xyn_opc(opc: u8, x:u8, y: u8, n: u8) -> u16 {
+        ((((opc & 0xF) as u16) << 12 | ((x & 0xF) as u16) << 8 | ((y & 0xF) as u16) << 4) | ((n & 0xf) as u16)).into()
     }
 
     #[test]
@@ -415,7 +415,7 @@ mod chip8_tests {
         /* Test each register behaves the same */
         for i in 0..Chip8Instance::NUM_V_REGISTERS {
             for j in 0..Chip8Instance::NUM_V_REGISTERS {
-                let op = build_xy0_opc(5, i as u8, j as u8);
+                let op = build_xyn_opc(5, i as u8, j as u8, 0);
                 interpret_instruction(&mut c8i, op);
 
                 /* Match, so PC should be incremented again. */
@@ -436,7 +436,7 @@ mod chip8_tests {
         /* Test each register behaves the same */
         for i in 0..Chip8Instance::NUM_V_REGISTERS {
             for j in 0..Chip8Instance::NUM_V_REGISTERS {
-                let op = build_xy0_opc(5, i as u8, j as u8);
+                let op = build_xyn_opc(5, i as u8, j as u8, 0);
 
                 /* Ensure that VI != VJ */
                 if i == j {
@@ -495,19 +495,19 @@ mod chip8_tests {
     fn opc_8xy0() {
         let mut c8i = Chip8Instance::default();
 
-        for i in (0x8001..0x9000).step_by(0x100) {
-            for j in (0..0xF1).step_by(0x10) {
-                let op = (i & 0xff00) | j;
+        for i in 0..Chip8Instance::NUM_V_REGISTERS {
+            for j in 0..Chip8Instance::NUM_V_REGISTERS {
+                let op = build_xyn_opc(8, i as u8, j as u8, 0);
 
                 /* Set destination with a known value */
-                interpret_instruction(&mut c8i, 0x6005 | (Chip8Instance::opc_regx(op)) as u16);
+                interpret_instruction(&mut c8i, build_xnn_opc(6, i as u8, 5));
                 /* Set source to test value */
-                interpret_instruction(&mut c8i, 0x60a0 | (Chip8Instance::opc_regy(j)) as u16);
+                interpret_instruction(&mut c8i, build_xnn_opc(6, j as u8, 0xa0));
                 /* Set VX to VY */
                 interpret_instruction(&mut c8i, op);
                 assert_eq!(
-                    c8i.v_regs[Chip8Instance::opc_regx(op)],
-                    c8i.v_regs[Chip8Instance::opc_regy(op)]
+                    c8i.v_regs[i],
+                    c8i.v_regs[j]
                 );
             }
         }
