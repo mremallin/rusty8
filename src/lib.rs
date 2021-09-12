@@ -1,8 +1,8 @@
 use rand::prelude::*;
 use variant_count::VariantCount;
 
-#[derive(VariantCount)]
-enum Chip8Key {
+#[derive(Clone, Copy, VariantCount)]
+pub enum Chip8Key {
     Key0,
     Key1,
     Key2,
@@ -31,6 +31,7 @@ pub struct Chip8Instance {
     vram: [[u8; Chip8Instance::DISPLAY_WIDTH_PIXELS]; Chip8Instance::DISPLAY_HEIGHT_PIXELS],
     keys_pressed: [bool; Chip8Key::VARIANT_COUNT],
     delay_timer: u64,
+    execution_paused_for_key_ld: bool,
 }
 
 impl Chip8Instance {
@@ -332,6 +333,11 @@ impl Chip8Instance {
             {
                 self.v_regs[Chip8Instance::opc_regx(instruction)] = self.delay_timer as u8
             }
+            0xa =>
+            /* LD Vx, K */
+            {
+                self.execution_paused_for_key_ld = true;
+            }
             _ => self.unknown_instruction(instruction),
         }
     }
@@ -369,6 +375,34 @@ impl Chip8Instance {
             _ => self.unknown_instruction(instruction),
         }
     }
+
+    fn u16_memory_read(&mut self, address: u16) -> u16 {
+        (self.ram[address as usize] as u16) << 8 | (self.ram[(address + 1) as usize]) as u16
+    }
+
+    pub fn step(&mut self) {
+        let op = self.u16_memory_read(self.pc);
+
+        if !self.execution_paused_for_key_ld {
+            self.pc += 2;
+            self.interpret_instruction(op);
+        }
+    }
+
+    pub fn key_pressed(&mut self, key: Chip8Key) {
+        let mut key_opcode = self.u16_memory_read(self.pc - 2);
+
+        self.keys_pressed[key as usize] = true;
+
+        if Chip8Instance::is_little_endian() {
+            key_opcode = key_opcode.to_be();
+        }
+
+        if self.execution_paused_for_key_ld {
+            self.v_regs[Chip8Instance::opc_regx(key_opcode)] = key as u8;
+            self.execution_paused_for_key_ld = false;
+        }
+    }
 }
 
 /* Default used for UT purposes */
@@ -384,6 +418,7 @@ impl Default for Chip8Instance {
             vram: [[0; Chip8Instance::DISPLAY_WIDTH_PIXELS]; Chip8Instance::DISPLAY_HEIGHT_PIXELS],
             keys_pressed: [false; Chip8Key::VARIANT_COUNT],
             delay_timer: 0,
+            execution_paused_for_key_ld: false,
         }
     }
 }
@@ -1148,6 +1183,31 @@ mod chip8_tests {
         for i in 0..Chip8Instance::NUM_V_REGISTERS {
             interpret_instruction(&mut c8i, build_xnn_opc(0xf, i as u8, 7));
             assert_eq!(c8i.v_regs[i], 42);
+        }
+    }
+
+    #[test]
+    fn opc_fx0a() {
+        let mut c8i = Chip8Instance::default();
+
+        for i in 0..Chip8Instance::NUM_V_REGISTERS {
+            let op = build_xnn_opc(0xF, i as u8, 0x0a).to_be();
+
+            c8i.ram[Chip8Instance::PROGRAM_LOAD_ADDR as usize] = ((op & 0xFF00) >> 8) as u8;
+            c8i.ram[(Chip8Instance::PROGRAM_LOAD_ADDR + 1) as usize] = (op & 0xFF) as u8;
+
+            c8i.step();
+            assert_eq!(c8i.pc, Chip8Instance::PROGRAM_LOAD_ADDR + 2);
+
+            /* The interpreter core will be waiting for a key press
+             * after the LD Vx, K instruction. It will not advance
+             * execution further until a key is received. */
+            c8i.step();
+            assert_eq!(c8i.pc, Chip8Instance::PROGRAM_LOAD_ADDR + 2);
+
+            c8i.key_pressed(Chip8Key::KeyF);
+            assert_eq!(c8i.v_regs[i], Chip8Key::KeyF as u8);
+            c8i = Chip8Instance::default();
         }
     }
 }
