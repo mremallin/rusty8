@@ -10,3 +10,6 @@ edition = "2018"
     version = "0.34"
     default-features = false
     features = ["mixer"]
+
+[dependencies]
+rand = "0.8.4"

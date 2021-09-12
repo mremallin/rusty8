@@ -1,4 +1,7 @@
+use rand::prelude::*;
+
 pub struct Chip8Instance {
+    rng: Box<dyn RngCore>,
     ram: [u8; 0x1000],
     v_regs: [u8; 16],
     i_reg: u16,
@@ -216,6 +219,11 @@ impl Chip8Instance {
         self.i_reg = Chip8Instance::opc_nnn(instruction) + self.v_regs[0] as u16;
     }
 
+    fn match_opcode_c(&mut self, instruction: u16) {
+        self.v_regs[0] = self.rng.gen::<u8>()
+            & Chip8Instance::opc_nn(instruction);
+    }
+
     fn is_little_endian() -> bool {
         (47 as u16).to_be() != 47
     }
@@ -238,6 +246,7 @@ impl Chip8Instance {
             0x9 => self.match_opcode_9(instruction),
             0xa => self.match_opcode_a(instruction),
             0xb => self.match_opcode_b(instruction),
+            0xc => self.match_opcode_c(instruction),
             _ => self.unknown_instruction(instruction),
         }
     }
@@ -247,6 +256,7 @@ impl Chip8Instance {
 impl Default for Chip8Instance {
     fn default() -> Chip8Instance {
         Chip8Instance {
+            rng: Box::new(thread_rng()),
             ram: [0; 0x1000],
             v_regs: [0; Chip8Instance::NUM_V_REGISTERS],
             i_reg: 0,
@@ -261,6 +271,8 @@ impl Default for Chip8Instance {
 #[cfg(test)]
 mod chip8_tests {
     use crate::Chip8Instance;
+    use rand::Rng;
+    use rand::rngs::mock::StepRng;
 
     /* CHIP8 operates with Big-Endian data so for test convenience, handle
      * the byteswap of the instruction for test readability */
@@ -841,5 +853,20 @@ mod chip8_tests {
         interpret_instruction(&mut c8i, 0x60ff);
         interpret_instruction(&mut c8i, 0xbfff);
         assert_eq!(c8i.i_reg, 0x10fe);
+    }
+
+    #[test]
+    /* RND Vx, NN
+     * Set Vx = random byte AND NN.
+     */
+    fn opc_cxnn() {
+        let mut c8i = Chip8Instance::default();
+        c8i.rng = Box::new(StepRng::new(4, 0));
+
+        interpret_instruction(&mut c8i, 0xC0FF);
+        assert_eq!(c8i.v_regs[0], 4);
+
+        interpret_instruction(&mut c8i, 0xC000);
+        assert_eq!(c8i.v_regs[0], 0);
     }
 }
