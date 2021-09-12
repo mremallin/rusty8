@@ -7,7 +7,7 @@ pub struct Chip8Instance {
     i_reg: u16,
     pc: u16,
     stack_ptr: usize,
-    vram: [[u8; 640]; 320],
+    vram: [[u8; Chip8Instance::DISPLAY_WIDTH_PIXELS]; Chip8Instance::DISPLAY_HEIGHT_PIXELS],
 }
 
 impl Chip8Instance {
@@ -18,13 +18,15 @@ impl Chip8Instance {
      * not overwrite past the stack boundaries */
     const STACK_BASE_ADDR: usize = 0xEFE;
     const NUM_V_REGISTERS: usize = 16;
+    const DISPLAY_WIDTH_PIXELS: usize = 64;
+    const DISPLAY_HEIGHT_PIXELS: usize = 32;
 
     fn unknown_instruction(&mut self, instruction: u16) {
         println!("Unknown instruction decoded: {:04x}", instruction);
     }
 
     fn clear_display(&mut self) {
-        self.vram.iter_mut().for_each(|m| *m = [0; 640]);
+        self.vram.iter_mut().for_each(|m| *m = [0; 64]);
     }
 
     fn stack_push(&mut self, val: u16) {
@@ -50,6 +52,14 @@ impl Chip8Instance {
         }
     }
 
+    fn opc_n(instruction: u16) -> u8 {
+        (instruction & 0xF) as u8
+    }
+
+    fn opc_nn(instruction: u16) -> u8 {
+        (instruction & 0xFF) as u8
+    }
+
     fn opc_nnn(instruction: u16) -> u16 {
         instruction & 0x0FFF
     }
@@ -60,10 +70,6 @@ impl Chip8Instance {
 
     fn opc_regy(instruction: u16) -> usize {
         ((instruction & 0x00F0) >> 4).into()
-    }
-
-    fn opc_nn(instruction: u16) -> u8 {
-        ((instruction & 0xFF) as u8).into()
     }
 
     fn match_opcode_1(&mut self, instruction: u16) {
@@ -222,6 +228,56 @@ impl Chip8Instance {
         self.v_regs[0] = self.rng.gen::<u8>() & Chip8Instance::opc_nn(instruction);
     }
 
+    fn match_opcode_d(&mut self, instruction: u16) {
+        /* DRW Vx, Vy, N
+         * Display N-byte sprite starting at memory location I at (Vx, Vy),
+         * set VF = collision.
+         */
+        let vx = self.v_regs[Chip8Instance::opc_regx(instruction)] as usize;
+        let mut vy = self.v_regs[Chip8Instance::opc_regy(instruction)] as usize;
+        let num_bytes = Chip8Instance::opc_n(instruction);
+        let mut sprite_addr = self.i_reg as usize;
+        let mut previous_sprite;
+        let mut paintbrush;
+
+        /* Start by assuming no pixels will be erased */
+        self.v_regs[0xf] = 0;
+
+        for _i in 0..num_bytes {
+            previous_sprite = 0;
+            /* For each byte of the sprite, the packed byte (1 bit per pixel)
+             * needs to be expanded back out into individual bytes */
+            for j in 0..8 {
+                previous_sprite |= self.vram[vy][vx + j];
+            }
+
+            /* Now write a byte of the new sprite to vram */
+            for j in 0..8 {
+                if (self.ram[sprite_addr] & (1 << (7 - j))) != 0 {
+                    paintbrush = 0xff;
+                } else {
+                    paintbrush = 0x0;
+                }
+
+                self.vram[vy][vx + j] = paintbrush ^ self.vram[vy][vx + j];
+            }
+
+            /* The following sets VF without a branch, only a comparison.
+             * Let's say we have the following byte in VRAM to start
+             * 0x8A (10001010). If the new byte coming in clears any of
+             * those bits, the resulting byte in VRAM will always be
+             * less than the previous value. We can use that comparison
+             * to set the bit in VF indicating that a pixel was erased.
+             */
+            self.v_regs[0xf] |= ((previous_sprite > self.ram[sprite_addr]) as u8) & 0x1;
+
+            /* Move to next row on the screen */
+            sprite_addr += 1;
+            vy += 1;
+            vy = vy % Chip8Instance::DISPLAY_HEIGHT_PIXELS;
+        }
+    }
+
     fn is_little_endian() -> bool {
         (47 as u16).to_be() != 47
     }
@@ -246,6 +302,7 @@ impl Chip8Instance {
             0xa => self.match_opcode_a(instruction),
             0xb => self.match_opcode_b(instruction),
             0xc => self.match_opcode_c(instruction),
+            0xd => self.match_opcode_d(instruction),
             _ => self.unknown_instruction(instruction),
         }
     }
@@ -261,7 +318,7 @@ impl Default for Chip8Instance {
             i_reg: 0,
             pc: Chip8Instance::PROGRAM_LOAD_ADDR,
             stack_ptr: Chip8Instance::STACK_BASE_ADDR,
-            vram: [[0; 640]; 320],
+            vram: [[0; Chip8Instance::DISPLAY_WIDTH_PIXELS]; Chip8Instance::DISPLAY_HEIGHT_PIXELS],
         }
     }
 }
@@ -299,7 +356,7 @@ mod chip8_tests {
     fn opc_00e0() {
         let mut c8i = Chip8Instance::default();
 
-        c8i.vram.iter_mut().for_each(|m| *m = [0xff; 640]);
+        c8i.vram.iter_mut().for_each(|m| *m = [0xff; Chip8Instance::DISPLAY_WIDTH_PIXELS]);
 
         interpret_instruction(&mut c8i, 0x00e0);
 
@@ -895,5 +952,68 @@ mod chip8_tests {
 
         assert_eq!(c8i.v_regs[0xf], 0);
         assert_eq!(c8i.vram[0][0], 0);
+    }
+
+    #[test]
+    fn opc_dxyn_pixel_cleared() {
+        let mut c8i = Chip8Instance::default();
+
+        interpret_instruction(&mut c8i, build_xnn_opc(0x6, 1, 0));
+        interpret_instruction(&mut c8i, build_nnn_opc(0xa, 0x300));
+
+        c8i.ram[0x300] = 0x8a;
+        /* Write some bits to be cleared in VRAM */
+        c8i.vram[0][0] = 0xff;
+        c8i.vram[0][4] = 0xff;
+
+        interpret_instruction(&mut c8i, build_xyn_opc(0xd, 1, 1, 1));
+        assert_eq!(c8i.v_regs[0xf], 1);
+        assert_eq!(c8i.vram[0][0], 0);
+    }
+
+    #[test]
+    fn opc_dxyn_multiple_bytes() {
+        let mut c8i = Chip8Instance::default();
+
+        interpret_instruction(&mut c8i, build_xnn_opc(0x6, 2, 0));
+        interpret_instruction(&mut c8i, build_nnn_opc(0xa, 0x300));
+
+        for i in 0x300..0x310 {
+            c8i.ram[i] = 0x8a;
+        }
+
+        interpret_instruction(&mut c8i, build_xyn_opc(0xd, 2, 2, 0xf));
+
+        /* Check some pixels */
+        assert_eq!(c8i.vram[0][0], 0xff);
+        assert_eq!(c8i.vram[0][1], 0x00);
+        assert_eq!(c8i.vram[0][4], 0xff);
+
+        /* Nothing in VRAM at the start of the test so no pixels are cleared */
+        assert_eq!(c8i.v_regs[0xf], 0);
+    }
+
+    #[test]
+    fn opc_dxyn_wraparound() {
+        let mut c8i = Chip8Instance::default();
+
+        interpret_instruction(&mut c8i, build_xnn_opc(0x6, 3, 0));
+        interpret_instruction(&mut c8i, build_xnn_opc(0x6, 4, 30));
+        interpret_instruction(&mut c8i, build_nnn_opc(0xa, 0x300));
+
+        for i in 0x300..0x310 {
+            c8i.ram[i] = 0x8a;
+        }
+
+        interpret_instruction(&mut c8i, build_xyn_opc(0xd, 3, 4, 0xf));
+
+        /* Check some pixels */
+        assert_eq!(c8i.vram[0][0], 0xff);
+        assert_eq!(c8i.vram[0][1], 0x00);
+        assert_eq!(c8i.vram[30][0], 0xff);
+        assert_eq!(c8i.vram[30][1], 0x0);
+
+        /* Nothing in VRAM at the start of the test so no pixels are cleared */
+        assert_eq!(c8i.v_regs[0xf], 0);
     }
 }
