@@ -220,8 +220,7 @@ impl Chip8Instance {
     }
 
     fn match_opcode_c(&mut self, instruction: u16) {
-        self.v_regs[0] = self.rng.gen::<u8>()
-            & Chip8Instance::opc_nn(instruction);
+        self.v_regs[0] = self.rng.gen::<u8>() & Chip8Instance::opc_nn(instruction);
     }
 
     fn is_little_endian() -> bool {
@@ -271,8 +270,8 @@ impl Default for Chip8Instance {
 #[cfg(test)]
 mod chip8_tests {
     use crate::Chip8Instance;
-    use rand::Rng;
     use rand::rngs::mock::StepRng;
+    use rand::Rng;
 
     /* CHIP8 operates with Big-Endian data so for test convenience, handle
      * the byteswap of the instruction for test readability */
