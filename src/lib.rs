@@ -568,21 +568,21 @@ mod chip8_tests {
     fn opc_8xy3() {
         let mut c8i = Chip8Instance::default();
 
-        for i in (0x8003..0x9000).step_by(0x100) {
-            for j in (0..0xF3).step_by(0x10) {
-                let op = (i & 0xFF0F) | j;
+        for i in 0..Chip8Instance::NUM_V_REGISTERS {
+            for j in 0..Chip8Instance::NUM_V_REGISTERS {
+                let op = build_xyn_opc(8, i as u8, j as u8, 3);
 
                 /* Set destination with a known value */
-                interpret_instruction(&mut c8i, 0x60b5 | (op & 0x0f00));
+                interpret_instruction(&mut c8i, build_xnn_opc(6, i as u8, 0xb5));
                 /* Set source to test value */
-                interpret_instruction(&mut c8i, 0x60a0 | ((j & 0xf0) << 4));
+                interpret_instruction(&mut c8i, build_xnn_opc(6, j as u8, 0xa0));
                 /* Set Vx = Vx & Vy */
                 interpret_instruction(&mut c8i, op);
 
-                if ((i & 0x0F00) >> 4) == (j & 0xF0) {
-                    assert_eq!(c8i.v_regs[((i & 0x0F00) >> 8) as usize], 0x0);
+                if i == j {
+                    assert_eq!(c8i.v_regs[i], 0x0);
                 } else {
-                    assert_eq!(c8i.v_regs[((i & 0x0F00) >> 8) as usize], 0x15);
+                    assert_eq!(c8i.v_regs[i], 0x15);
                 }
             }
         }
