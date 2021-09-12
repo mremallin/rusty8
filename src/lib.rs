@@ -7,7 +7,7 @@ pub struct Chip8Instance {
     i_reg: u16,
     pc: u16,
     stack_ptr: usize,
-    vram: [u8; 640 * 320],
+    vram: [[u8; 640]; 320],
 }
 
 impl Chip8Instance {
@@ -24,7 +24,7 @@ impl Chip8Instance {
     }
 
     fn clear_display(&mut self) {
-        self.vram.iter_mut().for_each(|m| *m = 0);
+        self.vram.iter_mut().for_each(|m| *m = [0; 640]);
     }
 
     fn stack_push(&mut self, val: u16) {
@@ -231,7 +231,8 @@ impl Chip8Instance {
             instruction = instruction.to_be() as u16;
         }
 
-        match (instruction & 0xF000) >> 12 {
+        let instruction_type = (instruction & 0xF000) >> 12;
+        match instruction_type {
             0x0 => self.match_opcode_0(instruction),
             0x1 => self.match_opcode_1(instruction),
             0x2 => self.match_opcode_2(instruction),
@@ -260,7 +261,7 @@ impl Default for Chip8Instance {
             i_reg: 0,
             pc: Chip8Instance::PROGRAM_LOAD_ADDR,
             stack_ptr: Chip8Instance::STACK_BASE_ADDR,
-            vram: [0; 640 * 320],
+            vram: [[0; 640]; 320],
         }
     }
 }
@@ -298,12 +299,14 @@ mod chip8_tests {
     fn opc_00e0() {
         let mut c8i = Chip8Instance::default();
 
-        c8i.vram.iter_mut().for_each(|m| *m = 0xff);
+        c8i.vram.iter_mut().for_each(|m| *m = [0xff; 640]);
 
         interpret_instruction(&mut c8i, 0x00e0);
 
-        for (i, elem) in c8i.vram.iter().enumerate() {
-            assert_eq!(*elem, 0, "VRAM was not cleared at byte {}", i);
+        for (i, row) in c8i.vram.iter().enumerate() {
+            for (j, column) in row.iter().enumerate() {
+                assert_eq!(*column, 0, "VRAM was not cleared at {}, {}", i, j);
+            }
         }
     }
 
@@ -880,5 +883,17 @@ mod chip8_tests {
 
         interpret_instruction(&mut c8i, build_xnn_opc(0xc, 0, 0));
         assert_eq!(c8i.v_regs[0], 0);
+    }
+
+    #[test]
+    fn opc_dxyn_nop() {
+        let mut c8i = Chip8Instance::default();
+
+        interpret_instruction(&mut c8i, build_xnn_opc(0x6, 0, 0));
+        interpret_instruction(&mut c8i, build_nnn_opc(0xa, 0x300));
+        interpret_instruction(&mut c8i, build_xyn_opc(0xd, 0, 0, 1));
+
+        assert_eq!(c8i.v_regs[0xf], 0);
+        assert_eq!(c8i.vram[0][0], 0);
     }
 }
