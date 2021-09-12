@@ -30,6 +30,7 @@ pub struct Chip8Instance {
     stack_ptr: usize,
     vram: [[u8; Chip8Instance::DISPLAY_WIDTH_PIXELS]; Chip8Instance::DISPLAY_HEIGHT_PIXELS],
     keys_pressed: [bool; Chip8Key::VARIANT_COUNT],
+    delay_timer: u64,
 }
 
 impl Chip8Instance {
@@ -316,6 +317,16 @@ impl Chip8Instance {
         }
     }
 
+    fn match_opcode_f(&mut self, instruction: u16) {
+        let op = Chip8Instance::opc_nn(instruction);
+
+        match op {
+            0x7 => /* LD Vx, DT */
+                self.v_regs[Chip8Instance::opc_regx(instruction)] = self.delay_timer as u8,
+            _ => self.unknown_instruction(instruction),
+        }
+    }
+
     fn is_little_endian() -> bool {
         (47 as u16).to_be() != 47
     }
@@ -342,6 +353,10 @@ impl Chip8Instance {
             0xc => self.match_opcode_c(instruction),
             0xd => self.match_opcode_d(instruction),
             0xe => self.match_opcode_e(instruction),
+            0xf => self.match_opcode_f(instruction),
+            /* This is not technically possible as the match is only on the first
+             * nibble of the instruction but is required to suppress a compiler error
+             * that not all matches are covered. */
             _ => self.unknown_instruction(instruction),
         }
     }
@@ -359,6 +374,7 @@ impl Default for Chip8Instance {
             stack_ptr: Chip8Instance::STACK_BASE_ADDR,
             vram: [[0; Chip8Instance::DISPLAY_WIDTH_PIXELS]; Chip8Instance::DISPLAY_HEIGHT_PIXELS],
             keys_pressed: [false; Chip8Key::VARIANT_COUNT],
+            delay_timer: 0,
         }
     }
 }
@@ -1111,6 +1127,17 @@ mod chip8_tests {
 
             assert_eq!(c8i.pc, Chip8Instance::PROGRAM_LOAD_ADDR + 2);
             interpret_instruction(&mut c8i, build_nnn_opc(1, Chip8Instance::PROGRAM_LOAD_ADDR));
+        }
+    }
+
+    #[test]
+    fn opc_fx07() {
+        let mut c8i = Chip8Instance::default();
+        c8i.delay_timer = 42;
+
+        for i in 0..Chip8Instance::NUM_V_REGISTERS {
+            interpret_instruction(&mut c8i, build_xnn_opc(0xf, i as u8, 7));
+            assert_eq!(c8i.v_regs[i], 42);
         }
     }
 }
