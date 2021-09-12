@@ -688,18 +688,18 @@ mod chip8_tests {
     #[test]
     /* Stores the least significant bit of VX in VF and then
      * shifts VX to the right by 1. */
-    fn opc_8xy6_no_low_bit() {
+    fn opc_8x06_no_low_bit() {
         let mut c8i = Chip8Instance::default();
 
-        for i in (0x8006..0x9000).step_by(0x100) {
-            interpret_instruction(&mut c8i, 0x6010 | (i & 0x0f00));
-            interpret_instruction(&mut c8i, i);
+        for i in 0..Chip8Instance::NUM_V_REGISTERS {
+            interpret_instruction(&mut c8i, build_xnn_opc(6, i as u8, 0x10));
+            interpret_instruction(&mut c8i, build_xnn_opc(8, i as u8, 0x06));
 
-            if (i & 0x0f00) >> 8 == 0xf {
-                assert_eq!(c8i.v_regs[0xf], 0);
+            if i == 0xf {
+                assert_eq!(c8i.v_regs[i], 0);
             } else {
                 assert_eq!(c8i.v_regs[0xf], 0);
-                assert_eq!(c8i.v_regs[((i & 0x0f00) >> 8) as usize], 0x08);
+                assert_eq!(c8i.v_regs[i], 0x08);
             }
         }
     }
@@ -707,18 +707,18 @@ mod chip8_tests {
     #[test]
     /* Stores the least significant bit of VX in VF and then
      * shifts VX to the right by 1. */
-    fn opc_8xy6_low_bit() {
+    fn opc_8x06_low_bit() {
         let mut c8i = Chip8Instance::default();
 
-        for i in (0x8006..0x9000).step_by(0x100) {
-            interpret_instruction(&mut c8i, 0x6011 | (i & 0x0f00));
-            interpret_instruction(&mut c8i, i);
+        for i in 0..Chip8Instance::NUM_V_REGISTERS {
+            interpret_instruction(&mut c8i, build_xnn_opc(6, i as u8, 0x11));
+            interpret_instruction(&mut c8i, build_xnn_opc(8, i as u8, 0x06));
 
-            if (i & 0x0f00) >> 8 == 0xf {
-                assert_eq!(c8i.v_regs[0xf], 0);
+            if i == 0xf {
+                assert_eq!(c8i.v_regs[i], 0);
             } else {
                 assert_eq!(c8i.v_regs[0xf], 1);
-                assert_eq!(c8i.v_regs[((i & 0x0f00) >> 8) as usize], 0x08);
+                assert_eq!(c8i.v_regs[i], 0x08);
             }
         }
     }
