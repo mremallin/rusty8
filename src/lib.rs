@@ -652,33 +652,33 @@ mod chip8_tests {
     fn opc_8xy5() {
         let mut c8i = Chip8Instance::default();
 
-        for i in (0x8005..0x9000).step_by(0x100) {
-            for j in (0..0xF5).step_by(0x10) {
-                let op = (i & 0xFF0F) | j;
+        for i in 0..Chip8Instance::NUM_V_REGISTERS {
+            for j in 0..Chip8Instance::NUM_V_REGISTERS {
+                let op = build_xyn_opc(8, i as u8, j as u8, 5);
 
                 /* Set destination with a known value */
-                interpret_instruction(&mut c8i, 0x6010 | (op & 0x0f00));
+                interpret_instruction(&mut c8i, build_xnn_opc(6, i as u8, 0x10));
                 /* Set source to test value */
-                interpret_instruction(&mut c8i, 0x6005 | ((j & 0xf0) << 4));
+                interpret_instruction(&mut c8i, build_xnn_opc(6, j as u8, 5));
                 /* Set Vx = Vx & Vy */
                 interpret_instruction(&mut c8i, op);
 
                 /* Different from the Add operation, the borrow flag is set
                  * first and then subtraction is performed. This means that
                  * use of the flag register will impact the result. */
-                if (op & 0x0F00) >> 8 == 0xF && (j & 0xF0) >> 4 == 0xF {
-                    assert_eq!(c8i.v_regs[0xF], 0);
-                } else if (op & 0xf0) == 0xf0 {
+                if i == 0xf && j == 0xf {
+                    assert_eq!(c8i.v_regs[0xf], 0);
+                } else if j == 0xf {
                     /* Vx - 0x1 = 0xF */
-                    assert_eq!(c8i.v_regs[((op & 0x0f00) >> 8) as usize], 0xf);
-                } else if (op & 0x0f00) == 0x0f00 {
+                    assert_eq!(c8i.v_regs[i], 0xf);
+                } else if i == 0xf {
                     /* VF (0x1) - Vy = 0xFC */
                     assert_eq!(c8i.v_regs[0xf], 0xfc);
-                } else if ((op & 0x0F00) >> 4) == (j & 0xF0) {
-                    assert_eq!(c8i.v_regs[((op & 0x0F00) >> 8) as usize], 0x00);
+                } else if i == j {
+                    assert_eq!(c8i.v_regs[i], 0x00);
                     assert_eq!(c8i.v_regs[0xf], 0);
                 } else {
-                    assert_eq!(c8i.v_regs[((op & 0x0F00) >> 8) as usize], 0x0b);
+                    assert_eq!(c8i.v_regs[i], 0x0b);
                     assert_eq!(c8i.v_regs[0xf], 1);
                 }
             }
