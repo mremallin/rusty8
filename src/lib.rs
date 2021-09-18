@@ -331,16 +331,32 @@ impl Chip8Instance {
         match op {
             0x7 =>
             /* LD Vx, DT */
-                self.v_regs[Chip8Instance::opc_regx(instruction)] = self.delay_timer as u8,
+            {
+                self.v_regs[Chip8Instance::opc_regx(instruction)] = self.delay_timer as u8
+            }
             0xa =>
             /* LD Vx, K */
-                self.execution_paused_for_key_ld = true,
+            {
+                self.execution_paused_for_key_ld = true
+            }
             0x15 =>
             /* LD DT, Vx */
-                self.delay_timer = self.v_regs[Chip8Instance::opc_regx(instruction)],
+            {
+                self.delay_timer = self.v_regs[Chip8Instance::opc_regx(instruction)]
+            }
             0x18 =>
             /* LD ST, Vx */
-                self.sound_timer = self.v_regs[Chip8Instance::opc_regx(instruction)],
+            {
+                self.sound_timer = self.v_regs[Chip8Instance::opc_regx(instruction)]
+            }
+            0x1e =>
+            /* ADD I, Vx */
+            {
+                self.i_reg = u16::wrapping_add(
+                    self.i_reg,
+                    self.v_regs[Chip8Instance::opc_regx(instruction)] as u16,
+                )
+            }
             _ => self.unknown_instruction(instruction),
         }
     }
@@ -1240,6 +1256,21 @@ mod chip8_tests {
             /* LD ST, Vx */
             interpret_instruction(&mut c8i, build_xnn_opc(0xF, i as u8, 0x18));
             assert_eq!(c8i.v_regs[i], c8i.sound_timer as u8);
+        }
+    }
+
+    #[test]
+    fn opc_fx1e() {
+        let mut c8i = Chip8Instance::default();
+
+        for i in 0..Chip8Instance::NUM_V_REGISTERS {
+            /* LOAD I, 0x100 */
+            interpret_instruction(&mut c8i, build_nnn_opc(0xa, 0x100));
+            /* LOAD X, 50 */
+            interpret_instruction(&mut c8i, build_xnn_opc(0x6, i as u8, 0x55));
+            /* ADD I, Vx */
+            interpret_instruction(&mut c8i, build_xnn_opc(0xF, i as u8, 0x1e));
+            assert_eq!(c8i.i_reg, 0x155);
         }
     }
 }
