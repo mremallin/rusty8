@@ -31,6 +31,7 @@ pub struct Chip8Instance {
     vram: [[u8; Chip8Instance::DISPLAY_WIDTH_PIXELS]; Chip8Instance::DISPLAY_HEIGHT_PIXELS],
     keys_pressed: [bool; Chip8Key::VARIANT_COUNT],
     delay_timer: u8,
+    sound_timer: u8,
     execution_paused_for_key_ld: bool,
 }
 
@@ -337,6 +338,9 @@ impl Chip8Instance {
             0x15 =>
             /* LD DT, Vx */
                 self.delay_timer = self.v_regs[Chip8Instance::opc_regx(instruction)],
+            0x18 =>
+            /* LD ST, Vx */
+                self.sound_timer = self.v_regs[Chip8Instance::opc_regx(instruction)],
             _ => self.unknown_instruction(instruction),
         }
     }
@@ -417,6 +421,7 @@ impl Default for Chip8Instance {
             vram: [[0; Chip8Instance::DISPLAY_WIDTH_PIXELS]; Chip8Instance::DISPLAY_HEIGHT_PIXELS],
             keys_pressed: [false; Chip8Key::VARIANT_COUNT],
             delay_timer: 0,
+            sound_timer: 0,
             execution_paused_for_key_ld: false,
         }
     }
@@ -1215,12 +1220,26 @@ mod chip8_tests {
         let mut c8i = Chip8Instance::default();
 
         for i in 0..Chip8Instance::NUM_V_REGISTERS {
+            c8i.delay_timer = 0;
             /* LOAD X, 45 */
             interpret_instruction(&mut c8i, build_xnn_opc(0x6, i as u8, 45));
             /* LD DT, Vx */
             interpret_instruction(&mut c8i, build_xnn_opc(0xF, i as u8, 0x15));
             assert_eq!(c8i.v_regs[i], c8i.delay_timer as u8);
-            c8i.delay_timer = 0;
+        }
+    }
+
+    #[test]
+    fn opc_fx18() {
+        let mut c8i = Chip8Instance::default();
+
+        for i in 0..Chip8Instance::NUM_V_REGISTERS {
+            c8i.sound_timer = 0;
+            /* LOAD X, 50 */
+            interpret_instruction(&mut c8i, build_xnn_opc(0x6, i as u8, 50));
+            /* LD ST, Vx */
+            interpret_instruction(&mut c8i, build_xnn_opc(0xF, i as u8, 0x18));
+            assert_eq!(c8i.v_regs[i], c8i.sound_timer as u8);
         }
     }
 }
